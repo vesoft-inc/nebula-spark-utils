@@ -4,16 +4,15 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-package com.vesoft.nebula.tools.importer.test.mock
+package com.vesoft.nebula.tools.importer.mock
 
 import com.vesoft.nebula.graph.{AuthResponse, ErrorCode, ExecutionResponse, GraphService}
-import mock.MockConfigs
 import org.apache.log4j.Logger
 
 class MockQueryProcessor extends GraphService.Iface {
   private[this] val LOG = Logger.getLogger(this.getClass)
 
-  var queryStatement: Array[Byte] = null
+  var queryStatement: Array[Byte]       = null
   var countDownLatchFailOfInsert: Int   = -1
   var countDownLatchFailOfSentence: Int = -1
 
@@ -25,8 +24,7 @@ class MockQueryProcessor extends GraphService.Iface {
   def resetLatchInsert(): Unit   = countDownLatchFailOfInsert = -1
   def resetLatchSentence(): Unit = countDownLatchFailOfSentence = -1
 
-  override def authenticate(username: Array[Byte],
-                            password: Array[Byte]): AuthResponse = {
+  override def authenticate(username: Array[Byte], password: Array[Byte]): AuthResponse = {
     LOG.info(s"Get login user: ${username}, password: ${password}")
     if (MockConfigs.userConfig.user == username && MockConfigs.userConfig.password == password)
       new AuthResponse(ErrorCode.SUCCEEDED, "SUCCEEDED".getBytes(), 1)

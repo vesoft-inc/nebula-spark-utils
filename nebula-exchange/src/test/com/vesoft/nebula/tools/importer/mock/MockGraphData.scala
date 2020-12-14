@@ -4,21 +4,12 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-package com.vesoft.nebula.tools.importer.test.mock
+package com.vesoft.nebula.tools.importer.mock
 
 import com.typesafe.config.impl.ConfigImpl.fromAnyRef
 import com.vesoft.nebula.tools.importer.KeyPolicy
-import com.vesoft.nebula.tools.importer.config.{
-  EdgeConfigEntry,
-  FileBaseSourceConfigEntry,
-  NebulaSinkConfigEntry,
-  SinkCategory,
-  SourceCategory,
-  TagConfigEntry
-}
+import com.vesoft.nebula.tools.importer.config._
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
-import scala.collection.immutable
 
 object Spark {
   private val master  = "local[1]"

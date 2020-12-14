@@ -4,10 +4,9 @@
  * attached with Common Clause Condition 1.0, found in the LICENSES directory.
  */
 
-package mock
+package com.vesoft.nebula.tools.importer.mock
 
 import com.vesoft.nebula.tools.importer.config._
-import com.vesoft.nebula.tools.importer.test.mock.{MockGraphDataEdge, MockGraphDataVertex}
 
 import scala.util.Random
 
