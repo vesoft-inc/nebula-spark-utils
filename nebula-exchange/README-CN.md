@@ -17,7 +17,7 @@ Exchange 2.0 依赖 Nebula Java Client 2.0。
     $ mvn clean install -Dmaven.test.skip=true -Dgpg.skip -Dmaven.javadoc.skip=true  
     ```
 
-    打包结束后，在本地 Maven Repository 仓库中可以看到生成的 /com/vesoft/client/2.0.0-beta/client-2.0.0-beta.jar。
+    打包结束后，在本地 Maven Repository 仓库中可以看到生成的 /com/vesoft/client/2.0.0-rc1/client-2.0.0-rc1.jar。
 
 2. 编译打包 Exchange 2.0。
 
@@ -45,6 +45,10 @@ Exchange 2.0 依赖 Nebula Java Client 2.0。
 
 *5. 配置文件参考 [application.conf](https://github.com/vesoft-inc/nebula-spark-utils/tree/main/nebula-exchange/src/main/resources)。*
 
+*6. Exchange 2.0 的导入命令：*
+```
+$SPARK_HOME/bin/submit --class com.vesoft.nebula.exchange.Exchange --master local nebula-exchange-2.0.0.jar -c /path/to/application.conf
+```
 ## 贡献
 
 Nebula Exchange 2.0 是一个完全开源的项目，欢迎开源爱好者通过以下方式参与：

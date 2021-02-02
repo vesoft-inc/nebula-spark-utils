@@ -17,7 +17,7 @@ Exchange 2.0 depends on the latest Nebula Java Client 2.0。
     $ mvn clean install -Dmaven.test.skip=true -Dgpg.skip -Dmaven.javadoc.skip=true  
     ```
 
-    After the installing, you can see the newly generated /com/vesoft/client/2.0.0-beta/client-2.0.0-beta.jar in your local Maven repository.
+    After the installing, you can see the newly generated /com/vesoft/client/2.0.0-rc1/client-2.0.0-rc1.jar in your local Maven repository.
 
 2. Package Exchange 2.0。
 
@@ -30,6 +30,11 @@ Exchange 2.0 depends on the latest Nebula Java Client 2.0。
     After the packaging, you can see the newly generated nebula-exchange-2.0.0.jar under the nebula-spark-utils/nebula-exchange/target/ directory.
     
 ## How to use
+
+Import command:
+```
+$SPARK_HOME/bin/submit --class com.vesoft.nebula.exchange.Exchange --master local nebula-exchange-2.0.0.jar -c /path/to/application.conf
+```
 
 For more details about Exchange, please refer to [Exchange 1.0](https://github.com/vesoft-inc/nebula-java/tree/v1.0/tools/exchange) .
 
