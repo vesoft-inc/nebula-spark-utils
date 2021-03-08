@@ -156,6 +156,7 @@ class EdgeProcessor(data: DataFrame,
             val metaCache: MetaCache = MetaManager.getMetaManager(hostAddrs.asJava)
             val codec                = new NebulaCodecImpl(metaCache)
             val edgeKey              = codec.edgeKey(spaceName, srcId, edgeName, ranking, dstId)
+            val inboundEdgeKey       = codec.inboundEdgeKey(spaceName, dstId, edgeName, ranking, srcId)
             val values = for {
               property <- fieldKeys if property.trim.length != 0
             } yield
@@ -163,9 +164,13 @@ class EdgeProcessor(data: DataFrame,
                 .asInstanceOf[AnyRef]
 
             val edgeValue = codec.encodeEdge(spaceName, edgeName, nebulaKeys.asJava, values.asJava)
-            (edgeKey, edgeValue)
+            (edgeKey, inboundEdgeKey, edgeValue)
           }
-        }(Encoders.tuple(Encoders.BINARY, Encoders.BINARY))
+        }(Encoders.tuple(Encoders.BINARY, Encoders.BINARY, Encoders.BINARY))
+        .flatMap(line => {
+            List((line._1, line._3), (line._2, line._3))
+          }
+        )(Encoders.tuple(Encoders.BINARY, Encoders.BINARY))
         .toDF("key", "value")
         .sortWithinPartitions("key")
         .foreachPartition { iterator: Iterator[Row] =>
