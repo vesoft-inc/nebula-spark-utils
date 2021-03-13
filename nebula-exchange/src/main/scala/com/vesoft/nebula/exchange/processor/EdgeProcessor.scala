@@ -27,6 +27,7 @@ import com.vesoft.nebula.exchange.{
   ErrorHandler,
   GraphProvider,
   KeyPolicy,
+  DirectPolicy,
   MetaProvider,
   VidType
 }
@@ -168,7 +169,18 @@ class EdgeProcessor(data: DataFrame,
           }
         }(Encoders.tuple(Encoders.BINARY, Encoders.BINARY, Encoders.BINARY))
         .flatMap(line => {
-            List((line._1, line._3), (line._2, line._3))
+            if (edgeConfig.targetDirect.isDefined) {
+              edgeConfig.targetDirect.get match {
+                case DirectPolicy.OUTBOUND =>
+                  List((line._1, line._3))
+                case DirectPolicy.INBOUND =>
+                  List((line._2, line._3))
+                case _ =>
+                  List((line._1, line._3), (line._2, line._3))
+              }
+            } else {
+              List((line._1, line._3), (line._2, line._3))
+            }
           }
         )(Encoders.tuple(Encoders.BINARY, Encoders.BINARY))
         .toDF("key", "value")

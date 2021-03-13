@@ -7,6 +7,8 @@
 package com.vesoft.nebula.exchange.config
 
 import com.vesoft.nebula.exchange.KeyPolicy
+import com.vesoft.nebula.exchange.DirectPolicy
+
 
 /**
   * SchemaConfigEntry is tag/edge super class use to save some basic parameter for importer.
@@ -104,6 +106,7 @@ case class EdgeConfigEntry(override val name: String,
                            rankingField: Option[String],
                            targetField: String,
                            targetPolicy: Option[KeyPolicy.Value],
+                           targetDirect: Option[DirectPolicy.Value],
                            isGeo: Boolean,
                            latitude: Option[String],
                            longitude: Option[String],
@@ -127,6 +130,7 @@ case class EdgeConfigEntry(override val name: String,
         s"ranking: $rankingField, " +
         s"target field: $targetField, " +
         s"target policy: $targetPolicy, " +
+        s"target direct: $targetDirect, " +
         s"batch: $batch, " +
         s"partition: $partition."
     } else {
@@ -138,6 +142,7 @@ case class EdgeConfigEntry(override val name: String,
         s"ranking: $rankingField, " +
         s"target field: $targetField, " +
         s"target policy: $targetPolicy, " +
+        s"target direct: $targetDirect, " +
         s"batch: $batch, " +
         s"partition: $partition."
     }

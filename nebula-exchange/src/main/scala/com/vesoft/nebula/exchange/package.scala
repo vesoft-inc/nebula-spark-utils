@@ -88,5 +88,12 @@ package object exchange {
     val UUID = Value("uuid")
   }
 
+  object DirectPolicy extends Enumeration {
+    type DIRECT = Value
+    val BOTH = Value("both")
+    val OUTBOUND = Value("outbound")
+    val INBOUND = Value("inbound")
+  }
+
   case class Offset(start: Long, size: Long)
 }
