@@ -11,7 +11,6 @@ import java.nio.file.Files
 
 import com.google.common.net.HostAndPort
 import com.vesoft.nebula.exchange.KeyPolicy
-import com.vesoft.nebula.exchange.DirectPolicy
 import com.typesafe.config.{Config, ConfigFactory}
 import com.vesoft.nebula.exchange.Argument
 import org.apache.log4j.Logger
@@ -400,13 +399,6 @@ object Configs {
           None
         }
 
-        val targetDirect = if (edgeConfig.hasPath("direct")) {
-          val direct = edgeConfig.getString("direct").toLowerCase
-          Some(DirectPolicy.withName(direct))
-        } else {
-          None
-        }
-
         val ranking = if (edgeConfig.hasPath("ranking")) {
           Some(edgeConfig.getString("ranking"))
         } else {
@@ -446,7 +438,6 @@ object Configs {
           ranking,
           targetField,
           targetPolicy,
-          targetDirect,
           isGeo,
           latitude,
           longitude,
