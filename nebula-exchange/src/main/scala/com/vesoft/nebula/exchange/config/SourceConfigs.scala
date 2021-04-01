@@ -6,6 +6,7 @@
 
 package com.vesoft.nebula.exchange.config
 
+import com.vesoft.nebula.exchange.config.Type.Type
 import com.vesoft.nebula.exchange.utils.NebulaUtils
 
 /**
@@ -25,6 +26,7 @@ object SourceCategory extends Enumeration {
   val JANUS_GRAPH = Value("JANUS GRAPH")
   val MYSQL       = Value("MYSQL")
   val HBASE       = Value("HBASE")
+  val NEBULA      = Value("NEBULA")
 
   val SOCKET = Value("SOCKET")
   val KAFKA  = Value("KAFKA")
@@ -216,4 +218,16 @@ case class HBaseSourceConfigEntry(override val category: SourceCategory.Value,
   override def toString: String = {
     s"HBase source host: $host, port: $port, table: $table"
   }
+}
+
+/**
+  * NebulaSourceConfigEntry
+  */
+case class NebulaSourceConfigEntry(override val category: SourceCategory.Value,
+                                   label: String,
+                                   labelType: Type.Value,
+                                   noReturnFields: Boolean = false,
+                                   returnFields: List[String] = List())
+    extends ServerDataSourceConfigEntry() {
+  override def sentence: String = null
 }

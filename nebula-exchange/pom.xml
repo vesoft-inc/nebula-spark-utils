@@ -28,7 +28,6 @@
         <scala-logging.version>3.9.2</scala-logging.version>
         <scala-xml.version>2.11.0-M4</scala-xml.version>
         <scopt.version>3.7.1</scopt.version>
-        <nebula.version>2.0.0-SNAPSHOT</nebula.version>
         <s2.version>1.0.0</s2.version>
         <neo.version>2.4.5-M1</neo.version>
         <gremlin.version>3.4.6</gremlin.version>
@@ -526,21 +525,6 @@
             <version>${s2.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.vesoft</groupId>
-            <artifactId>client</artifactId>
-            <version>${nebula.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>commons-lang3</artifactId>
-                    <groupId>org.apache.commons</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>commons-codec</artifactId>
-                    <groupId>commons-codec</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
             <groupId>neo4j-contrib</groupId>
             <artifactId>neo4j-spark-connector</artifactId>
             <version>${neo.version}</version>
@@ -697,6 +681,12 @@
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-xml</artifactId>
             <version>${scala-xml.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.vesoft</groupId>
+            <artifactId>nebula-spark-connector</artifactId>
+            <version>2.0.0</version>
         </dependency>
     </dependencies>
     <repositories>

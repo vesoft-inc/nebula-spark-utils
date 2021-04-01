@@ -10,13 +10,16 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.file.{Files, Paths}
 
 import com.google.common.geometry.{S2CellId, S2LatLng}
+import com.google.common.net.HostAndPort
 import com.vesoft.nebula.client.graph.data.HostAddress
 import com.vesoft.nebula.client.meta.{MetaCache, MetaManager}
 import com.vesoft.nebula.encoder.NebulaCodecImpl
 import com.vesoft.nebula.exchange.config.{
+  CSVSinkConfigEntry,
   Configs,
   EdgeConfigEntry,
   FileBaseSinkConfigEntry,
+  FileDataSinkConfigEntry,
   SinkCategory,
   StreamingDataSourceConfigEntry
 }
@@ -31,7 +34,7 @@ import com.vesoft.nebula.exchange.{
   VidType
 }
 import org.apache.log4j.Logger
-import com.vesoft.nebula.exchange.writer.{NebulaGraphClientWriter, NebulaSSTWriter}
+import com.vesoft.nebula.exchange.writer.{CsvWriter, NebulaGraphClientWriter, NebulaSSTWriter}
 import org.apache.commons.codec.digest.MurmurHash2
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.streaming.Trigger
@@ -95,13 +98,22 @@ class EdgeProcessor(data: DataFrame,
 
   override def process(): Unit = {
 
-    val address = config.databaseConfig.getMetaAddress
-    val space   = config.databaseConfig.space
+    var address: List[HostAndPort]     = null
+    var space: String                  = null
+    var metaProvider: MetaProvider     = null
+    var fieldTypeMap: Map[String, Int] = null
+    var isVidStringType: Boolean       = false
+    var partitionNum: Int              = 0
 
-    val metaProvider    = new MetaProvider(address)
-    val fieldTypeMap    = NebulaUtils.getDataSourceFieldType(edgeConfig, space, metaProvider)
-    val isVidStringType = metaProvider.getVidType(space) == VidType.STRING
-    val partitionNum    = metaProvider.getPartNumber(space)
+    if (edgeConfig.dataSinkConfigEntry.category != SinkCategory.CSV) {
+      address = config.databaseConfig.getMetaAddress
+      space = config.databaseConfig.space
+
+      metaProvider = new MetaProvider(address)
+      fieldTypeMap = NebulaUtils.getDataSourceFieldType(edgeConfig, space, metaProvider)
+      isVidStringType = metaProvider.getVidType(space) == VidType.STRING
+      partitionNum = metaProvider.getPartNumber(space)
+    }
 
     if (edgeConfig.dataSinkConfigEntry.category == SinkCategory.SST) {
       val fileBaseConfig = edgeConfig.dataSinkConfigEntry.asInstanceOf[FileBaseSinkConfigEntry]
@@ -234,7 +246,7 @@ class EdgeProcessor(data: DataFrame,
             }
           }
         }
-    } else {
+    } else if (edgeConfig.dataSinkConfigEntry.category == SinkCategory.CLIENT) {
       val edgeFrame = data
         .map { row =>
           var sourceField = if (!edgeConfig.isGeo) {
@@ -307,6 +319,11 @@ class EdgeProcessor(data: DataFrame,
           .awaitTermination()
       } else
         edgeFrame.foreachPartition(processEachPartition _)
+    } else {
+      val fileSinkConfigEntry = edgeConfig.dataSinkConfigEntry.asInstanceOf[CSVSinkConfigEntry]
+      val path: String        = fileSinkConfigEntry.path
+      val writer              = new CsvWriter(path)
+      writer.write(data)
     }
   }
 

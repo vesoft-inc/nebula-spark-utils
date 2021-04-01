@@ -62,7 +62,9 @@ case class TagConfigEntry(override val name: String,
                           override val partition: Int,
                           override val checkPointPath: Option[String])
     extends SchemaConfigEntry {
-  require(name.trim.nonEmpty && vertexField.trim.nonEmpty && batch > 0)
+  if (dataSinkConfigEntry.category != SinkCategory.CSV) {
+    require(name.trim.nonEmpty && vertexField.trim.nonEmpty && batch > 0)
+  }
 
   override def toString: String = {
     s"Tag name: $name, " +
@@ -111,9 +113,10 @@ case class EdgeConfigEntry(override val name: String,
                            override val partition: Int,
                            override val checkPointPath: Option[String])
     extends SchemaConfigEntry {
-  require(
-    name.trim.nonEmpty && sourceField.trim.nonEmpty &&
-      targetField.trim.nonEmpty && batch > 0)
+  if (dataSinkConfigEntry.category != SinkCategory.CSV) {
+    require(
+      name.trim.nonEmpty && sourceField.trim.nonEmpty && targetField.trim.nonEmpty && batch > 0)
+  }
 
   override def toString: String = {
     if (isGeo) {

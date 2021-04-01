@@ -6,6 +6,7 @@
 
 package com.vesoft.nebula.exchange.writer
 
+import org.apache.spark.sql.DataFrame
 import org.rocksdb.{EnvOptions, Options, RocksDB, SstFileWriter}
 import org.slf4j.LoggerFactory
 
@@ -14,7 +15,7 @@ import org.slf4j.LoggerFactory
   * @param path
   */
 class NebulaSSTWriter(path: String) extends Writer {
-  require(path.trim.size != 0)
+  require(path.trim.nonEmpty)
 
   private val LOG = LoggerFactory.getLogger(getClass)
 
@@ -47,5 +48,22 @@ class NebulaSSTWriter(path: String) extends Writer {
     writer.close()
     options.close()
     env.close()
+  }
+}
+
+/**
+  * CSVWriter
+  */
+class CsvWriter(path: String) extends Writer {
+  require(path.trim.nonEmpty)
+
+  private val LOG = LoggerFactory.getLogger(getClass)
+
+  override def prepare(): Unit = ???
+
+  override def close(): Unit = ???
+
+  def write(dataFrame: DataFrame): Unit = {
+    dataFrame.write.option("header", true).csv(path)
   }
 }

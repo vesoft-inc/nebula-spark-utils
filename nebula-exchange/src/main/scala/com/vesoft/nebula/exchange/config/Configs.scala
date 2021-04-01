@@ -35,8 +35,10 @@ object Type extends Enumeration {
 case class DataBaseConfigEntry(graphAddress: List[String],
                                space: String,
                                metaAddresses: List[String]) {
-  require(graphAddress.nonEmpty)
-  require(metaAddresses.nonEmpty)
+  require(graphAddress.nonEmpty && !graphAddress.contains("，"),
+          "address cannot be empty or separated by Chinese comma")
+  require(metaAddresses.nonEmpty && !graphAddress.contains("，"),
+          "address cannot be empty or separated by Chinese comma")
   require(space.trim.nonEmpty)
 
   override def toString: String = super.toString
@@ -278,9 +280,24 @@ object Configs {
           break()
         }
 
+        val sourceCategory = toSourceCategory(tagConfig.getString("type.source"))
+        val sourceConfig   = dataSourceConfig(sourceCategory, tagConfig, Type.VERTEX)
+        LOG.info(s"Source Config ${sourceConfig}")
+
+        val sinkCategory = toSinkCategory(tagConfig.getString("type.sink"))
+        val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig, tagConfig)
+        LOG.info(s"Sink Config ${sourceConfig}")
+
         val tagName = tagConfig.getString("name")
-        val fields  = tagConfig.getStringList("fields").asScala.toList
-        val nebulaFields = if (tagConfig.hasPath("nebula.fields")) {
+        val fields = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else {
+          tagConfig.getStringList("fields").asScala.toList
+        }
+
+        val nebulaFields = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else if (tagConfig.hasPath("nebula.fields")) {
           tagConfig.getStringList("nebula.fields").asScala.toList
         } else {
           fields
@@ -288,7 +305,9 @@ object Configs {
 
         // You can specified the vertex field name via the config item `vertex`
         // If you want to qualified the key policy, you can wrap them into a block.
-        val vertexField = if (tagConfig.hasPath("vertex.field")) {
+        val vertexField = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else if (tagConfig.hasPath("vertex.field")) {
           tagConfig.getString("vertex.field")
         } else {
           tagConfig.getString("vertex")
@@ -300,14 +319,6 @@ object Configs {
         } else {
           None
         }
-
-        val sourceCategory = toSourceCategory(tagConfig.getString("type.source"))
-        val sourceConfig   = dataSourceConfig(sourceCategory, tagConfig, nebulaConfig)
-        LOG.info(s"Source Config ${sourceConfig}")
-
-        val sinkCategory = toSinkCategory(tagConfig.getString("type.sink"))
-        val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig)
-        LOG.info(s"Sink Config ${sourceConfig}")
 
         val batch = getOrElse(tagConfig, "batch", DEFAULT_BATCH)
         val checkPointPath =
@@ -346,33 +357,44 @@ object Configs {
           break()
         }
 
+        val sourceCategory = toSourceCategory(edgeConfig.getString("type.source"))
+        val sourceConfig   = dataSourceConfig(sourceCategory, edgeConfig, Type.EDGE)
+        LOG.info(s"Source Config ${sourceConfig}")
+
+        val sinkCategory = toSinkCategory(edgeConfig.getString("type.sink"))
+        val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig, edgeConfig)
+        LOG.info(s"Sink Config ${sourceConfig}")
+
         val edgeName = edgeConfig.getString("name")
-        val fields   = edgeConfig.getStringList("fields").asScala.toList
-        val nebulaFields = if (edgeConfig.hasPath("nebula.fields")) {
+
+        val fields = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else {
+          edgeConfig.getStringList("fields").asScala.toList
+        }
+
+        val nebulaFields = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else if (edgeConfig.hasPath("nebula.fields")) {
           edgeConfig.getStringList("nebula.fields").asScala.toList
         } else {
           fields
         }
+
         val isGeo = !edgeConfig.hasPath("source") &&
           edgeConfig.hasPath("latitude") &&
           edgeConfig.hasPath("longitude")
 
-        val sourceCategory = toSourceCategory(edgeConfig.getString("type.source"))
-        val sourceConfig   = dataSourceConfig(sourceCategory, edgeConfig, nebulaConfig)
-        LOG.info(s"Source Config ${sourceConfig}")
-
-        val sinkCategory = toSinkCategory(edgeConfig.getString("type.sink"))
-        val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig)
-        LOG.info(s"Sink Config ${sourceConfig}")
-
-        val sourceField = if (!isGeo) {
+        val sourceField = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else if (!isGeo) {
           if (edgeConfig.hasPath("source.field")) {
             edgeConfig.getString("source.field")
           } else {
             edgeConfig.getString("source")
           }
         } else {
-          throw new IllegalArgumentException("Source must be specified")
+          throw new IllegalArgumentException("Source must not be specified")
         }
 
         val sourcePolicy = if (!isGeo) {
@@ -386,7 +408,9 @@ object Configs {
           None
         }
 
-        val targetField: String = if (edgeConfig.hasPath("target.field")) {
+        val targetField: String = if (sourceCategory == SourceCategory.NEBULA) {
+          null
+        } else if (edgeConfig.hasPath("target.field")) {
           edgeConfig.getString("target.field")
         } else {
           edgeConfig.getString("target")
@@ -480,6 +504,7 @@ object Configs {
       case "MYSQL"   => SourceCategory.MYSQL
       case "PULSAR"  => SourceCategory.PULSAR
       case "HBASE"   => SourceCategory.HBASE
+      case "NEBULA"  => SourceCategory.NEBULA
       case _         => throw new IllegalArgumentException(s"${category} not support")
     }
   }
@@ -494,6 +519,7 @@ object Configs {
     category.trim.toUpperCase match {
       case "CLIENT" => SinkCategory.CLIENT
       case "SST"    => SinkCategory.SST
+      case "CSV"    => SinkCategory.CSV
       case _        => throw new IllegalArgumentException(s"${category} not support")
     }
   }
@@ -507,7 +533,7 @@ object Configs {
     */
   private[this] def dataSourceConfig(category: SourceCategory.Value,
                                      config: Config,
-                                     nebulaConfig: Config): DataSourceConfigEntry = {
+                                     nebulaConfig: Type.Value): DataSourceConfigEntry = {
     category match {
       case SourceCategory.PARQUET =>
         FileBaseSourceConfigEntry(SourceCategory.PARQUET, config.getString("path"))
@@ -607,13 +633,30 @@ object Configs {
                                config.getString("table"),
                                config.getString("columnFamily"),
                                fields.toSet.toList)
+      case SourceCategory.NEBULA =>
+        val noField: Boolean = {
+          if (config.hasPath("noField")) {
+            config.getBoolean("noField")
+          } else false
+        }
+        val returnFields: ListBuffer[String] = new ListBuffer[String]
+        if (config.hasPath("return.fields")) {
+          returnFields.append(config.getStringList("return.fields").asScala: _*)
+        }
+
+        NebulaSourceConfigEntry(SourceCategory.NEBULA,
+                                config.getString("name"),
+                                nebulaConfig,
+                                noField,
+                                returnFields.toList)
       case _ =>
         throw new IllegalArgumentException("Unsupported data source")
     }
   }
 
   private[this] def dataSinkConfig(category: SinkCategory.Value,
-                                   nebulaConfig: Config): DataSinkConfigEntry = {
+                                   nebulaConfig: Config,
+                                   labelConfig: Config): DataSinkConfigEntry = {
     category match {
       case SinkCategory.CLIENT =>
         NebulaSinkConfigEntry(SinkCategory.CLIENT,
@@ -631,6 +674,10 @@ object Configs {
                                 nebulaConfig.getString("path.local"),
                                 nebulaConfig.getString("path.remote"),
                                 fsNameNode)
+      }
+      case SinkCategory.CSV => {
+        val path = labelConfig.getString("path")
+        CSVSinkConfigEntry(SinkCategory.CSV, path)
       }
       case _ =>
         throw new IllegalArgumentException("Unsupported data sink")

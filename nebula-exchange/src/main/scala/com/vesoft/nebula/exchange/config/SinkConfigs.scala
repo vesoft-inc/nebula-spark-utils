@@ -14,6 +14,7 @@ object SinkCategory extends Enumeration {
 
   val CLIENT = Value("CLIENT")
   val SST    = Value("SST")
+  val CSV    = Value("csv")
 }
 
 class SinkCategory
@@ -23,6 +24,13 @@ class SinkCategory
   */
 sealed trait DataSinkConfigEntry {
   def category: SinkCategory.Value
+}
+
+/**
+  * CSV DataSinkConfig
+  */
+sealed trait FileDataSinkConfigEntry extends DataSinkConfigEntry {
+  def path: String
 }
 
 /**
@@ -45,5 +53,12 @@ case class NebulaSinkConfigEntry(override val category: SinkCategory.Value, addr
     extends DataSinkConfigEntry {
   override def toString: String = {
     s"Nebula sink addresses: ${addresses.mkString("[", ", ", "]")}"
+  }
+}
+
+case class CSVSinkConfigEntry(override val category: SinkCategory.Value, path: String)
+    extends DataSinkConfigEntry {
+  override def toString: String = {
+    s"CSV sink path: $path"
   }
 }

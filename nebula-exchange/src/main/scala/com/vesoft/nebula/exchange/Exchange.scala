@@ -11,6 +11,7 @@ import java.io.File
 
 import com.vesoft.nebula.exchange.config.{
   Configs,
+  DataBaseConfigEntry,
   DataSourceConfigEntry,
   FileBaseSourceConfigEntry,
   HBaseSourceConfigEntry,
@@ -18,6 +19,7 @@ import com.vesoft.nebula.exchange.config.{
   JanusGraphSourceConfigEntry,
   KafkaSourceConfigEntry,
   MySQLSourceConfigEntry,
+  NebulaSourceConfigEntry,
   Neo4JSourceConfigEntry,
   PulsarSourceConfigEntry,
   SinkCategory,
@@ -32,12 +34,13 @@ import com.vesoft.nebula.exchange.reader.{
   JanusGraphReader,
   KafkaReader,
   MySQLReader,
+  NebulaReader,
   Neo4JReader,
   ORCReader,
-  ParquetReader
+  ParquetReader,
+  PulsarReader
 }
 import com.vesoft.nebula.exchange.processor.ReloadProcessor
-import com.vesoft.nebula.exchange.reader.PulsarReader
 import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
 
@@ -116,18 +119,23 @@ object Exchange {
       LOG.info(s"batchFailure.reload: ${batchFailure.value}")
       sys.exit(0)
     }
+    val dataBaseConfigEntry = configs.databaseConfig
 
     // import tags
     if (configs.tagsConfig.nonEmpty) {
       for (tagConfig <- configs.tagsConfig) {
         LOG.info(s"Processing Tag ${tagConfig.name}")
 
-        val fieldKeys = tagConfig.fields
-        LOG.info(s"field keys: ${fieldKeys.mkString(", ")}")
-        val nebulaKeys = tagConfig.nebulaFields
-        LOG.info(s"nebula keys: ${nebulaKeys.mkString(", ")}")
+        var fieldKeys: List[String]  = null
+        var nebulaKeys: List[String] = null
+        if (tagConfig.dataSinkConfigEntry.category != SinkCategory.CSV) {
+          fieldKeys = tagConfig.fields
+          LOG.info(s"field keys: ${fieldKeys.mkString(", ")}")
+          nebulaKeys = tagConfig.nebulaFields
+          LOG.info(s"nebula keys: ${nebulaKeys.mkString(", ")}")
+        }
 
-        val data = createDataSource(spark, tagConfig.dataSourceConfigEntry)
+        val data = createDataSource(spark, tagConfig.dataSourceConfigEntry, dataBaseConfigEntry)
         if (data.isDefined && !c.dry) {
           val batchSuccess =
             spark.sparkContext.longAccumulator(s"batchSuccess.${tagConfig.name}")
@@ -158,11 +166,16 @@ object Exchange {
       for (edgeConfig <- configs.edgesConfig) {
         LOG.info(s"Processing Edge ${edgeConfig.name}")
 
-        val fieldKeys = edgeConfig.fields
-        LOG.info(s"field keys: ${fieldKeys.mkString(", ")}")
-        val nebulaKeys = edgeConfig.nebulaFields
-        LOG.info(s"nebula keys: ${nebulaKeys.mkString(", ")}")
-        val data = createDataSource(spark, edgeConfig.dataSourceConfigEntry)
+        var fieldKeys: List[String]  = null
+        var nebulaKeys: List[String] = null
+        if (edgeConfig.dataSinkConfigEntry.category != SinkCategory.CSV) {
+          fieldKeys = edgeConfig.fields
+          LOG.info(s"field keys: ${fieldKeys.mkString(", ")}")
+          nebulaKeys = edgeConfig.nebulaFields
+          LOG.info(s"nebula keys: ${nebulaKeys.mkString(", ")}")
+        }
+
+        val data = createDataSource(spark, edgeConfig.dataSourceConfigEntry, dataBaseConfigEntry)
         if (data.isDefined && !c.dry) {
           val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.${edgeConfig.name}")
           val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.${edgeConfig.name}")
@@ -188,7 +201,8 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.existError(configs.errorConfig.errorPath)) {
+    // disable the auto reimport function
+    if (false && ErrorHandler.existError(configs.errorConfig.errorPath)) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
       val data         = spark.read.text(configs.errorConfig.errorPath)
@@ -210,7 +224,8 @@ object Exchange {
     */
   private[this] def createDataSource(
       session: SparkSession,
-      config: DataSourceConfigEntry
+      config: DataSourceConfigEntry,
+      databaseConfig: DataBaseConfigEntry
   ): Option[DataFrame] = {
     config.category match {
       case SourceCategory.PARQUET =>
@@ -267,6 +282,10 @@ object Exchange {
       case SourceCategory.HBASE =>
         val hbaseSourceConfigEntry = config.asInstanceOf[HBaseSourceConfigEntry]
         val reader                 = new HBaseReader(session, hbaseSourceConfigEntry)
+        Some(reader.read())
+      case SourceCategory.NEBULA =>
+        val nebulaSourceConfigEntry = config.asInstanceOf[NebulaSourceConfigEntry]
+        val reader                  = new NebulaReader(session, databaseConfig, nebulaSourceConfigEntry)
         Some(reader.read())
       case _ => {
         LOG.error(s"Data source ${config.category} not supported")

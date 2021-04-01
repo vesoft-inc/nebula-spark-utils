@@ -7,13 +7,18 @@
 package com.vesoft.nebula.exchange.reader
 
 import com.google.common.collect.Maps
+import com.vesoft.nebula.connector.{NebulaConnectionConfig, ReadNebulaConfig}
+import com.vesoft.nebula.connector.connector.NebulaDataFrameReader
 import com.vesoft.nebula.exchange.config.{
+  DataBaseConfigEntry,
   HBaseSourceConfigEntry,
   HiveSourceConfigEntry,
   JanusGraphSourceConfigEntry,
   MySQLSourceConfigEntry,
+  NebulaSourceConfigEntry,
   Neo4JSourceConfigEntry,
-  ServerDataSourceConfigEntry
+  ServerDataSourceConfigEntry,
+  Type
 }
 import com.vesoft.nebula.exchange.utils.HDFSUtils
 import org.apache.hadoop.hbase.HBaseConfiguration
@@ -202,9 +207,39 @@ class JanusGraphReader(override val session: SparkSession,
   * @param session
   * @param nebulaConfig
   */
-class NebulaReader(override val session: SparkSession, nebulaConfig: ServerDataSourceConfigEntry)
+class NebulaReader(override val session: SparkSession,
+                   databaseConfig: DataBaseConfigEntry,
+                   nebulaConfig: NebulaSourceConfigEntry)
     extends ServerBaseReader(session, nebulaConfig.sentence) {
-  override def read(): DataFrame = ???
+  override def read(): DataFrame = {
+    val config =
+      NebulaConnectionConfig
+        .builder()
+        .withMetaAddress(databaseConfig.metaAddresses.mkString(","))
+        .withConenctionRetry(2)
+        .build()
+    val nebulaReadConfig: ReadNebulaConfig = ReadNebulaConfig
+      .builder()
+      .withSpace(databaseConfig.space)
+      .withLabel(nebulaConfig.label)
+      .withNoColumn(nebulaConfig.noReturnFields)
+      .withReturnCols(nebulaConfig.returnFields)
+      .build()
+    nebulaConfig.labelType match {
+      case Type.VERTEX => {
+        val vertex = session.read.nebula(config, nebulaReadConfig).loadVerticesToDF()
+        vertex
+      }
+      case Type.EDGE => {
+        val edge = session.read.nebula(config, nebulaReadConfig).loadEdgesToDF()
+        edge
+      }
+      case _ =>
+        throw new IllegalArgumentException(
+          s"nebula label ${nebulaConfig.labelType} type is invalid")
+    }
+
+  }
 }
 
 /**
