@@ -8,8 +8,6 @@ package com.vesoft.nebula
 
 import com.google.common.base.Optional
 import com.google.common.util.concurrent.ListenableFuture
-import com.vesoft.nebula.exchange.utils.NebulaUtils
-
 import scala.collection.mutable.ListBuffer
 
 package object exchange {
@@ -44,7 +42,7 @@ package object exchange {
                       values: List[Vertex],
                       policy: Option[KeyPolicy.Value] = None) {
 
-    def propertyNames: String = NebulaUtils.escapePropName(names).mkString(",")
+    def propertyNames: String = names.mkString(",")
 
     override def toString: String = {
       s"Vertices: " +
@@ -74,7 +72,7 @@ package object exchange {
                    values: List[Edge],
                    sourcePolicy: Option[KeyPolicy.Value] = None,
                    targetPolicy: Option[KeyPolicy.Value] = None) {
-    def propertyNames: String = NebulaUtils.escapePropName(names).mkString(",")
+    def propertyNames: String = names.mkString(",")
 
     override def toString: String = {
       "Edges:" +

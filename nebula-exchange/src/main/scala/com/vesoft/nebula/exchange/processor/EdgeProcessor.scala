@@ -11,6 +11,7 @@ import java.nio.file.{Files, Paths}
 
 import com.google.common.geometry.{S2CellId, S2LatLng}
 import com.vesoft.nebula.client.graph.data.HostAddress
+import com.vesoft.nebula.client.meta.{MetaCache, MetaManager}
 import com.vesoft.nebula.encoder.NebulaCodecImpl
 import com.vesoft.nebula.exchange.config.{
   Configs,
@@ -105,9 +106,9 @@ class EdgeProcessor(data: DataFrame,
     if (edgeConfig.dataSinkConfigEntry.category == SinkCategory.SST) {
       val fileBaseConfig = edgeConfig.dataSinkConfigEntry.asInstanceOf[FileBaseSinkConfigEntry]
       val namenode       = fileBaseConfig.fsName.orNull
+      val spaceName      = config.databaseConfig.space
       val edgeName       = edgeConfig.name
 
-      val vidType     = metaProvider.getVidType(space)
       val spaceVidLen = metaProvider.getSpaceVidLen(space)
       val edgeItem    = metaProvider.getEdgeItem(space, edgeName)
 
@@ -158,42 +159,20 @@ class EdgeProcessor(data: DataFrame,
               hostAddrs.append(new HostAddress(addr.getHostText, addr.getPort))
             }
 
-            val partitionId = NebulaUtils.getPartitionId(srcId, partitionNum, vidType)
+            val partitionId = NebulaUtils.getPartitionId(spaceName, srcId, partitionNum)
             val codec       = new NebulaCodecImpl()
-
-            import java.nio.ByteBuffer
-            val order = ByteOrder.nativeOrder
-            val srcBytes = if (vidType == VidType.INT) {
-              ByteBuffer
-                .allocate(8)
-                .order(ByteOrder.nativeOrder)
-                .putLong(srcId.toLong)
-                .array
-            } else {
-              srcId.getBytes()
-            }
-
-            val dstBytes = if (vidType == VidType.INT) {
-              ByteBuffer
-                .allocate(8)
-                .order(ByteOrder.nativeOrder)
-                .putLong(dstId.toLong)
-                .array
-            } else {
-              dstId.getBytes()
-            }
             val positiveEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
                                                             partitionId,
-                                                            srcBytes,
+                                                            srcId.getBytes,
                                                             edgeItem.getEdge_type,
                                                             ranking,
-                                                            dstBytes)
+                                                            dstId.getBytes)
             val reverseEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
                                                            partitionId,
-                                                           dstBytes,
+                                                           dstId.getBytes,
                                                            -edgeItem.getEdge_type,
                                                            ranking,
-                                                           srcBytes)
+                                                           srcId.getBytes)
 
             val values = for {
               property <- fieldKeys if property.trim.length != 0
@@ -220,7 +199,7 @@ class EdgeProcessor(data: DataFrame,
               val value = vertex.getAs[Array[Byte]](1)
               var part = ByteBuffer
                 .wrap(key, 0, 4)
-                .order(ByteOrder.nativeOrder)
+                .order(ByteOrder.LITTLE_ENDIAN)
                 .getInt >> 8
               if (part <= 0) {
                 part = part + partitionNum
@@ -260,8 +239,6 @@ class EdgeProcessor(data: DataFrame,
         .map { row =>
           var sourceField = if (!edgeConfig.isGeo) {
             val sourceIndex = row.schema.fieldIndex(edgeConfig.sourceField)
-            assert(sourceIndex >= 0 && row.get(sourceIndex) != null,
-                   s"source vertexId must exist and cannot be null, your row data is $row")
             row.get(sourceIndex).toString
           } else {
             val lat = row.getDouble(row.schema.fieldIndex(edgeConfig.latitude.get))
@@ -283,8 +260,6 @@ class EdgeProcessor(data: DataFrame,
           }
 
           val targetIndex = row.schema.fieldIndex(edgeConfig.targetField)
-          assert(targetIndex >= 0 && row.get(targetIndex) != null,
-                 s"target vertexId must exist and cannot be null, your row data is $row")
           var targetField = row.get(targetIndex).toString
           if (edgeConfig.targetPolicy.isEmpty) {
             // process string type vid
