@@ -69,7 +69,7 @@ object Exchange {
     LOG.info(s"Config ${configs}")
 
     val reload = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
-    val reload_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp/"
+    val reload_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp"
     val error_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
 
     val session = SparkSession
@@ -144,7 +144,7 @@ object Exchange {
           val batchFailure =
             spark.sparkContext.longAccumulator(s"batchFailure.${tagConfig.name}")
 
-          /*OldFiles will exists only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
           ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/vertices/${tagConfig.name}")
 
           val processor = new VerticesProcessor(
@@ -182,7 +182,7 @@ object Exchange {
           val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.${edgeConfig.name}")
           val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.${edgeConfig.name}")
 
-          /*OldFiles will exists only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
           ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/edges/${edgeConfig.name}")
 
           val processor = new EdgeProcessor(
@@ -213,30 +213,31 @@ object Exchange {
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
       var data_tmp: DataFrame = null
       var data_reload: DataFrame = null
+      var data_reload_tmp:DataFrame = null
       if (ErrorHandler.fileExists(error_tmp)) {
         data_tmp = spark.read.text(s"${error_tmp}/*/*/*")
       }
       if (ErrorHandler.fileExists(reload)) {
         data_reload = spark.read.text(reload)
       }
-
-      if (data_tmp == null && data_reload == null) {
+      /*Old Files will exist only when the program exited abnormally last time, so it is necessary to remove old files*/
+      if(ErrorHandler.fileExists(reload_tmp)){
+        ErrorHandler.moveOldFilesIfExist(reload_tmp)
+        data_reload_tmp = spark.read.text(s"${reload_tmp}_old*")
+      }
+      if (data_tmp == null && data_reload == null && data_reload_tmp == null) {
         sys.exit(0)
       }
 
-      val data = if (data_reload == null) {
-        data_tmp
-      } else if (data_tmp == null) {
-        data_reload
-      } else {
-        data_tmp.union(data_reload)
-      }.distinct()
+      val df_set = Set(data_tmp,data_reload,data_reload_tmp)
+      val data = df_set.filter(_!=null).reduce(_.union(_)).distinct()
 
       val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
 
       ErrorHandler.remove(error_tmp)
       ErrorHandler.remove(reload)
+      ErrorHandler.removeWithPathPattern(s"${reload_tmp}_old*")
 
       if (ErrorHandler.fileExists(reload_tmp)) {
         ErrorHandler.rename(reload_tmp, reload)

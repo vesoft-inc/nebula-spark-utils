@@ -17,8 +17,8 @@ import scala.collection.mutable.ArrayBuffer
 
 object ErrorHandler {
   private[this] lazy val LOG = Logger.getLogger(this.getClass)
+  private[this] lazy val fileSystem = FileSystem.get(new Configuration())
   def save(buffer: ArrayBuffer[String], path: String): Unit = {
-    val fileSystem = FileSystem.get(new Configuration())
     val errors     = fileSystem.create(new Path(path))
     try {
       for (error <- buffer) {
@@ -30,17 +30,27 @@ object ErrorHandler {
     }
   }
 
-  def remove(path:String)={
-    val fileSystem =FileSystem.get(new Configuration())
+  def remove(path:String):Boolean={
+    remove(new Path(path))
+  }
+
+  def remove(path:Path):Boolean={
     var result=false
     try {
-      result=fileSystem.delete(new Path(path), true)
+      result=fileSystem.delete(path, true)
       LOG.info(s"Remove File Path $path succeed")
     }catch {
       case e:IOException=>LOG.error(s"Remove File Path $path failed")
       case e:Exception=>LOG.error(ExceptionUtils.getFullStackTrace(e))
     }
     result
+  }
+
+  def removeWithPathPattern(path:String)={
+    val fileStatus=fileSystem.globStatus(new Path(path))
+    for(fs <- fileStatus){
+      remove(fs.getPath)
+    }
   }
 
   def fileExists(path: String): Boolean = {
@@ -54,7 +64,6 @@ object ErrorHandler {
   }
 
   def rename(src:String,dst:String)={
-    val fileSystem =FileSystem.get(new Configuration())
     val result = fileSystem.rename(new Path(src),new Path(dst))
     LOG.info(s"Rename File Path From $src To $dst")
     result
