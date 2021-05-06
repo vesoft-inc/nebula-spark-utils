@@ -45,7 +45,12 @@ object ErrorHandler {
 
   def existError(path: String): Boolean = {
     val fileSystem = FileSystem.get(new Configuration())
-    fileSystem.exists(new Path(path))
+    val existed = fileSystem.exists(new Path(path))
+    if(!existed){
+      false
+    }else{
+      fileSystem.listFiles(new Path(path),true).hasNext
+    }
   }
 
   def rename(src:String,dst:String)={

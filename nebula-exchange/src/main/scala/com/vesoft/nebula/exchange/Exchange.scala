@@ -70,7 +70,7 @@ object Exchange {
 
     val reload = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
     val reload_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp/"
-    val error_tmp =s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
+    val error_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
 
     val session = SparkSession
       .builder()
@@ -205,20 +205,31 @@ object Exchange {
     if (ErrorHandler.existError(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
-      val data_tmp = spark.read.text(error_tmp)
+      var data_tmp: DataFrame = null
       var data_reload: DataFrame = null
+      if (ErrorHandler.existError(error_tmp)) {
+        data_tmp = spark.read.text(error_tmp)
+      }
       if (ErrorHandler.existError(reload)) {
         data_reload = spark.read.text(reload)
       }
+
+      if (data_tmp == null && data_reload == null) {
+        sys.exit(0)
+      }
+
       val data = if (data_reload == null) {
         data_tmp
+      } else if (data_tmp == null) {
+        data_reload
       } else {
         data_tmp.union(data_reload)
       }.distinct()
+
       val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
 
-      ErrorHandler.remove(error_tmp);
+      ErrorHandler.remove(error_tmp)
       ErrorHandler.remove(reload)
 
       if (ErrorHandler.existError(reload_tmp)) {
