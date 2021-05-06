@@ -43,7 +43,7 @@ object ErrorHandler {
     result
   }
 
-  def existError(path: String): Boolean = {
+  def fileExists(path: String): Boolean = {
     val fileSystem = FileSystem.get(new Configuration())
     val existed = fileSystem.exists(new Path(path))
     if(!existed){
@@ -58,6 +58,22 @@ object ErrorHandler {
     val result = fileSystem.rename(new Path(src),new Path(dst))
     LOG.info(s"Rename File Path From $src To $dst")
     result
+  }
+
+  def moveOldFilesIfExist(path:String): Unit ={
+    val origin =path
+    if(fileExists(origin)){
+      var index=1
+      var continue=true
+      while(continue){
+        if(fileExists(s"${origin}_old_$index")){
+          index+=1
+        }else{
+          rename(origin,s"${origin}_old_$index")
+          continue=false
+        }
+      }
+    }
   }
 
 }

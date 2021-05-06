@@ -82,7 +82,7 @@ class EdgeProcessor(data: DataFrame,
     if (errorBuffer.nonEmpty) {
       ErrorHandler.save(
         errorBuffer,
-        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/${edgeConfig.name}.${TaskContext.getPartitionId}")
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/edges/${edgeConfig.name}/${edgeConfig.name}.${TaskContext.getPartitionId}")
       errorBuffer.clear()
     }
     LOG.info(

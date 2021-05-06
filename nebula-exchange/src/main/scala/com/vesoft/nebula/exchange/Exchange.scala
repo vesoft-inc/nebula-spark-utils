@@ -119,7 +119,7 @@ object Exchange {
 
       ErrorHandler.remove(reload)
 
-      if (ErrorHandler.existError(reload_tmp)) {
+      if (ErrorHandler.fileExists(reload_tmp)) {
         ErrorHandler.rename(reload_tmp, reload)
       }
       LOG.info(s"batchSuccess.reload: ${batchSuccess.value}")
@@ -143,6 +143,9 @@ object Exchange {
             spark.sparkContext.longAccumulator(s"batchSuccess.${tagConfig.name}")
           val batchFailure =
             spark.sparkContext.longAccumulator(s"batchFailure.${tagConfig.name}")
+
+          /*OldFiles will exists only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/vertices/${tagConfig.name}")
 
           val processor = new VerticesProcessor(
             repartition(data.get, tagConfig.partition, tagConfig.dataSourceConfigEntry.category),
@@ -179,6 +182,9 @@ object Exchange {
           val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.${edgeConfig.name}")
           val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.${edgeConfig.name}")
 
+          /*OldFiles will exists only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/edges/${edgeConfig.name}")
+
           val processor = new EdgeProcessor(
             repartition(data.get, edgeConfig.partition, edgeConfig.dataSourceConfigEntry.category),
             edgeConfig,
@@ -202,15 +208,15 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.existError(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
+    if (ErrorHandler.fileExists(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
       var data_tmp: DataFrame = null
       var data_reload: DataFrame = null
-      if (ErrorHandler.existError(error_tmp)) {
-        data_tmp = spark.read.text(error_tmp)
+      if (ErrorHandler.fileExists(error_tmp)) {
+        data_tmp = spark.read.text(s"${error_tmp}/*/*/*")
       }
-      if (ErrorHandler.existError(reload)) {
+      if (ErrorHandler.fileExists(reload)) {
         data_reload = spark.read.text(reload)
       }
 
@@ -232,7 +238,7 @@ object Exchange {
       ErrorHandler.remove(error_tmp)
       ErrorHandler.remove(reload)
 
-      if (ErrorHandler.existError(reload_tmp)) {
+      if (ErrorHandler.fileExists(reload_tmp)) {
         ErrorHandler.rename(reload_tmp, reload)
       }
       LOG.info(s"batchSuccess.reimport: ${batchSuccess.value}")
