@@ -6,15 +6,20 @@
 
 package com.vesoft.nebula.exchange
 
+import java.io.IOException
+
+import org.apache.commons.lang.exception.ExceptionUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.log4j.Logger
+
 import scala.collection.mutable.ArrayBuffer
 
 object ErrorHandler {
+  private[this] lazy val LOG = Logger.getLogger(this.getClass)
   def save(buffer: ArrayBuffer[String], path: String): Unit = {
     val fileSystem = FileSystem.get(new Configuration())
     val errors     = fileSystem.create(new Path(path))
-
     try {
       for (error <- buffer) {
         errors.writeBytes(error)
@@ -25,8 +30,29 @@ object ErrorHandler {
     }
   }
 
+  def remove(path:String)={
+    val fileSystem =FileSystem.get(new Configuration())
+    var result=false
+    try {
+      result=fileSystem.delete(new Path(path), true)
+      LOG.info(s"Remove File Path $path succeed")
+    }catch {
+      case e:IOException=>LOG.error(s"Remove File Path $path failed")
+      case e:Exception=>LOG.error(ExceptionUtils.getFullStackTrace(e))
+    }
+    result
+  }
+
   def existError(path: String): Boolean = {
     val fileSystem = FileSystem.get(new Configuration())
     fileSystem.exists(new Path(path))
   }
+
+  def rename(src:String,dst:String)={
+    val fileSystem =FileSystem.get(new Configuration())
+    val result = fileSystem.rename(new Path(src),new Path(dst))
+    LOG.info(s"Rename File Path From $src To $dst")
+    result
+  }
+
 }

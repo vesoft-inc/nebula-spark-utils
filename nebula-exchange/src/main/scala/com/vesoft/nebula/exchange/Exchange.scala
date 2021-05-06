@@ -50,14 +50,14 @@ final case class Argument(config: String = "application.conf",
 final case class TooManyErrorsException(private val message: String) extends Exception(message)
 
 /**
-  * SparkClientGenerator is a simple spark job used to write data into Nebula Graph parallel.
-  */
+ * SparkClientGenerator is a simple spark job used to write data into Nebula Graph parallel.
+ */
 object Exchange {
   private[this] val LOG = Logger.getLogger(this.getClass)
 
   def main(args: Array[String]): Unit = {
     val PROGRAM_NAME = "Nebula Graph Exchange"
-    val options      = Configs.parser(args, PROGRAM_NAME)
+    val options = Configs.parser(args, PROGRAM_NAME)
     val c: Argument = options match {
       case Some(config) => config
       case _ =>
@@ -67,6 +67,10 @@ object Exchange {
 
     val configs = Configs.parse(new File(c.config))
     LOG.info(s"Config ${configs}")
+
+    val reload = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
+    val reload_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp/"
+    val error_tmp =s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
 
     val session = SparkSession
       .builder()
@@ -109,9 +113,15 @@ object Exchange {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reload")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reload")
 
-      val data      = spark.read.text(c.reload)
+      val data = spark.read.text(reload)
       val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
+
+      ErrorHandler.remove(reload)
+
+      if (ErrorHandler.existError(reload_tmp)) {
+        ErrorHandler.rename(reload_tmp, reload)
+      }
       LOG.info(s"batchSuccess.reload: ${batchSuccess.value}")
       LOG.info(s"batchFailure.reload: ${batchFailure.value}")
       sys.exit(0)
@@ -192,12 +202,28 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.existError(configs.errorConfig.errorPath)) {
+    if (ErrorHandler.existError(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
-      val data         = spark.read.text(configs.errorConfig.errorPath)
-      val processor    = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
+      val data_tmp = spark.read.text(error_tmp)
+      var data_reload: DataFrame = null
+      if (ErrorHandler.existError(reload)) {
+        data_reload = spark.read.text(reload)
+      }
+      val data = if (data_reload == null) {
+        data_tmp
+      } else {
+        data_tmp.union(data_reload)
+      }.distinct()
+      val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
+
+      ErrorHandler.remove(error_tmp);
+      ErrorHandler.remove(reload)
+
+      if (ErrorHandler.existError(reload_tmp)) {
+        ErrorHandler.rename(reload_tmp, reload)
+      }
       LOG.info(s"batchSuccess.reimport: ${batchSuccess.value}")
       LOG.info(s"batchFailure.reimport: ${batchFailure.value}")
     }
@@ -206,16 +232,16 @@ object Exchange {
   }
 
   /**
-    * Create data source for different data type.
-    *
-    * @param session The Spark Session.
-    * @param config  The config.
-    * @return
-    */
+   * Create data source for different data type.
+   *
+   * @param session The Spark Session.
+   * @param config  The config.
+   * @return
+   */
   private[this] def createDataSource(
-      session: SparkSession,
-      config: DataSourceConfigEntry
-  ): Option[DataFrame] = {
+                                      session: SparkSession,
+                                      config: DataSourceConfigEntry
+                                    ): Option[DataFrame] = {
     config.category match {
       case SourceCategory.PARQUET =>
         val parquetConfig = config.asInstanceOf[FileBaseSourceConfigEntry]
@@ -266,11 +292,11 @@ object Exchange {
         Some(reader.read())
       case SourceCategory.JANUS_GRAPH =>
         val janusGraphSourceConfigEntry = config.asInstanceOf[JanusGraphSourceConfigEntry]
-        val reader                      = new JanusGraphReader(session, janusGraphSourceConfigEntry)
+        val reader = new JanusGraphReader(session, janusGraphSourceConfigEntry)
         Some(reader.read())
       case SourceCategory.HBASE =>
         val hbaseSourceConfigEntry = config.asInstanceOf[HBaseSourceConfigEntry]
-        val reader                 = new HBaseReader(session, hbaseSourceConfigEntry)
+        val reader = new HBaseReader(session, hbaseSourceConfigEntry)
         Some(reader.read())
       case _ => {
         LOG.error(s"Data source ${config.category} not supported")
@@ -280,12 +306,12 @@ object Exchange {
   }
 
   /**
-    * Repartition the data frame using the specified partition number.
-    *
-    * @param frame
-    * @param partition
-    * @return
-    */
+   * Repartition the data frame using the specified partition number.
+   *
+   * @param frame
+   * @param partition
+   * @return
+   */
   private[this] def repartition(frame: DataFrame,
                                 partition: Int,
                                 sourceCategory: SourceCategory.Value): DataFrame = {

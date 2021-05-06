@@ -40,15 +40,15 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
-  *
-  * @param data
-  * @param tagConfig
-  * @param fieldKeys
-  * @param nebulaKeys
-  * @param config
-  * @param batchSuccess
-  * @param batchFailure
-  */
+ *
+ * @param data
+ * @param tagConfig
+ * @param fieldKeys
+ * @param nebulaKeys
+ * @param config
+ * @param batchSuccess
+ * @param batchFailure
+ */
 class VerticesProcessor(data: DataFrame,
                         tagConfig: TagConfigEntry,
                         fieldKeys: List[String],
@@ -56,7 +56,7 @@ class VerticesProcessor(data: DataFrame,
                         config: Configs,
                         batchSuccess: LongAccumulator,
                         batchFailure: LongAccumulator)
-    extends Processor {
+  extends Processor {
 
   @transient
   private[this] lazy val LOG = Logger.getLogger(this.getClass)
@@ -65,12 +65,12 @@ class VerticesProcessor(data: DataFrame,
     val graphProvider = new GraphProvider(config.databaseConfig.getGraphAddress)
 
     val writer = new NebulaGraphClientWriter(config.databaseConfig,
-                                             config.userConfig,
-                                             config.connectionConfig,
-                                             config.executionConfig.retry,
-                                             config.rateConfig,
-                                             tagConfig,
-                                             graphProvider)
+      config.userConfig,
+      config.connectionConfig,
+      config.executionConfig.retry,
+      config.rateConfig,
+      tagConfig,
+      graphProvider)
 
     val errorBuffer = ArrayBuffer[String]()
 
@@ -90,7 +90,7 @@ class VerticesProcessor(data: DataFrame,
     if (errorBuffer.nonEmpty) {
       ErrorHandler.save(
         errorBuffer,
-        s"${config.errorConfig.errorPath}/${tagConfig.name}.${TaskContext.getPartitionId()}")
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/${tagConfig.name}.${TaskContext.getPartitionId()}")
       errorBuffer.clear()
     }
     LOG.info(
@@ -193,8 +193,8 @@ class VerticesProcessor(data: DataFrame,
                   writer.close()
                   val localFile = s"$localPath/$currentPart-$taskID.sst"
                   HDFSUtils.upload(localFile,
-                                   s"$remotePath/${currentPart}/$currentPart-$taskID.sst",
-                                   namenode)
+                    s"$remotePath/${currentPart}/$currentPart-$taskID.sst",
+                    namenode)
                   Files.delete(Paths.get(localFile))
                 }
                 currentPart = part
@@ -214,8 +214,8 @@ class VerticesProcessor(data: DataFrame,
               writer.close()
               val localFile = s"$localPath/$currentPart-$taskID.sst"
               HDFSUtils.upload(localFile,
-                               s"$remotePath/${currentPart}/$currentPart-$taskID.sst",
-                               namenode)
+                s"$remotePath/${currentPart}/$currentPart-$taskID.sst",
+                namenode)
               Files.delete(Paths.get(localFile))
             }
           }
@@ -226,7 +226,7 @@ class VerticesProcessor(data: DataFrame,
           val vertexID = {
             val index = row.schema.fieldIndex(tagConfig.vertexField)
             assert(index >= 0 && row.get(index) != null,
-                   s"vertexId must exist and cannot be null, your row data is $row")
+              s"vertexId must exist and cannot be null, your row data is $row")
             val value = row.get(index).toString
             if (tagConfig.vertexPolicy.isEmpty) {
               // process string type vid
@@ -235,12 +235,12 @@ class VerticesProcessor(data: DataFrame,
               } else {
                 // process int type vid
                 assert(NebulaUtils.isNumic(value),
-                       s"space vidType is int, but your vertex id $value is not numeric.")
+                  s"space vidType is int, but your vertex id $value is not numeric.")
                 value
               }
             } else {
               assert(!isVidStringType,
-                     "only int vidType can use policy, but your vidType is FIXED_STRING.")
+                "only int vidType can use policy, but your vidType is FIXED_STRING.")
               value
             }
           }

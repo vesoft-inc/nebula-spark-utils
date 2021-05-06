@@ -33,7 +33,7 @@ object MockConfigs {
 
   val executionConfig: ExecutionConfigEntry = ExecutionConfigEntry(1000, 1, 1)
 
-  val errorConfig: ErrorConfigEntry = ErrorConfigEntry("/tmp/", 100)
+  val errorConfig: ErrorConfigEntry = ErrorConfigEntry("/tmp/", 100,1)
 
   val rateConfig: RateConfigEntry = RateConfigEntry(100, 100)
 

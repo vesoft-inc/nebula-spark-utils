@@ -28,11 +28,11 @@ object Type extends Enumeration {
 }
 
 /**
-  * DataBaseConfigEntry describe the nebula cluster's address and which space will be used.
-  *
-  * @param graphAddress
-  * @param space
-  */
+ * DataBaseConfigEntry describe the nebula cluster's address and which space will be used.
+ *
+ * @param graphAddress
+ * @param space
+ */
 case class DataBaseConfigEntry(graphAddress: List[String],
                                space: String,
                                metaAddresses: List[String]) {
@@ -60,11 +60,11 @@ case class DataBaseConfigEntry(graphAddress: List[String],
 }
 
 /**
-  * UserConfigEntry is used when the client login the nebula graph service.
-  *
-  * @param user
-  * @param password
-  */
+ * UserConfigEntry is used when the client login the nebula graph service.
+ *
+ * @param user
+ * @param password
+ */
 case class UserConfigEntry(user: String, password: String) {
   require(user.trim.nonEmpty && password.trim.nonEmpty)
 
@@ -72,11 +72,11 @@ case class UserConfigEntry(user: String, password: String) {
 }
 
 /**
-  * ConnectionConfigEntry
-  *
-  * @param timeout
-  * @param retry
-  */
+ * ConnectionConfigEntry
+ *
+ * @param timeout
+ * @param retry
+ */
 case class ConnectionConfigEntry(timeout: Int, retry: Int) {
   require(timeout > 0 && retry > 0)
 
@@ -84,12 +84,12 @@ case class ConnectionConfigEntry(timeout: Int, retry: Int) {
 }
 
 /**
-  * ExecutionConfigEntry
-  *
-  * @param timeout
-  * @param retry
-  * @param interval
-  */
+ * ExecutionConfigEntry
+ *
+ * @param timeout
+ * @param retry
+ * @param interval
+ */
 case class ExecutionConfigEntry(timeout: Int, retry: Int, interval: Int) {
   require(timeout > 0 && retry > 0 && interval > 0)
 
@@ -97,23 +97,23 @@ case class ExecutionConfigEntry(timeout: Int, retry: Int, interval: Int) {
 }
 
 /**
-  * ErrorConfigEntry
-  *
-  * @param errorPath
-  * @param errorMaxSize
-  */
-case class ErrorConfigEntry(errorPath: String, errorMaxSize: Int) {
-  require(errorPath.trim.nonEmpty && errorMaxSize > 0)
+ * ErrorConfigEntry
+ *
+ * @param errorPath
+ * @param errorMaxSize
+ */
+case class ErrorConfigEntry(errorPath: String, errorMaxSize: Int, errorPathId:Int) {
+  require(errorPath.trim.nonEmpty && errorMaxSize > 0 && errorPathId>0)
 
   override def toString: String = super.toString
 }
 
 /**
-  * RateConfigEntry
-  *
-  * @param limit
-  * @param timeout
-  */
+ * RateConfigEntry
+ *
+ * @param limit
+ * @param timeout
+ */
 case class RateConfigEntry(limit: Int, timeout: Int) {
   require(limit > 0 && timeout > 0)
 
@@ -121,8 +121,8 @@ case class RateConfigEntry(limit: Int, timeout: Int) {
 }
 
 /**
-  *
-  */
+ *
+ */
 object SparkConfigEntry {
   def apply(config: Config): SparkConfigEntry = {
     val map         = mutable.Map[String, String]()
@@ -145,10 +145,10 @@ object SparkConfigEntry {
 }
 
 /**
-  * SparkConfigEntry support key-value pairs for spark session.
-  *
-  * @param map
-  */
+ * SparkConfigEntry support key-value pairs for spark session.
+ *
+ * @param map
+ */
 case class SparkConfigEntry(map: Map[String, String]) {
   override def toString: String = {
     ""
@@ -170,8 +170,8 @@ case class HiveConfigEntry(warehouse: String,
 }
 
 /**
-  * Configs
-  */
+ * Configs
+ */
 case class Configs(databaseConfig: DataBaseConfigEntry,
                    userConfig: UserConfigEntry,
                    connectionConfig: ConnectionConfigEntry,
@@ -193,6 +193,7 @@ object Configs {
   private[this] val DEFAULT_EXECUTION_INTERVAL   = 3000
   private[this] val DEFAULT_ERROR_OUTPUT_PATH    = "/tmp/nebula.writer.errors/"
   private[this] val DEFAULT_ERROR_MAX_BATCH_SIZE = Int.MaxValue
+  private[this] val DEFAULT_ERROR_PATH_ID        = 0
   private[this] val DEFAULT_RATE_LIMIT           = 1024
   private[this] val DEFAULT_RATE_TIMEOUT         = 100
   private[this] val DEFAULT_EDGE_RANKING         = 0L
@@ -205,10 +206,10 @@ object Configs {
   private[this] val DEFAULT_PARALLEL             = 1
 
   /**
-    *
-    * @param configPath
-    * @return
-    */
+   *
+   * @param configPath
+   * @return
+   */
   def parse(configPath: File): Configs = {
     if (!Files.exists(configPath.toPath)) {
       throw new IllegalArgumentException(s"${configPath} not exist")
@@ -244,7 +245,8 @@ object Configs {
     val errorConfig  = getConfigOrNone(nebulaConfig, "error")
     val errorPath    = getOrElse(errorConfig, "output", DEFAULT_ERROR_OUTPUT_PATH)
     val errorMaxSize = getOrElse(errorConfig, "max", DEFAULT_ERROR_MAX_BATCH_SIZE)
-    val errorEntry   = ErrorConfigEntry(errorPath, errorMaxSize)
+    val errorPathId  =getOrElse(errorConfig,"path_id",DEFAULT_ERROR_PATH_ID)
+    val errorEntry   = ErrorConfigEntry(errorPath, errorMaxSize, errorPathId)
 
     val rateConfig  = getConfigOrNone(nebulaConfig, "rate")
     val rateLimit   = getOrElse(rateConfig, "limit", DEFAULT_RATE_LIMIT)
@@ -261,10 +263,10 @@ object Configs {
       val connectionUserName   = config.getString("hive.connectionUserName")
       val connectionPassword   = config.getString("hive.connectionPassword")
       val hiveEntry = HiveConfigEntry(warehouse,
-                                      connectionURL,
-                                      connectionDriverName,
-                                      connectionUserName,
-                                      connectionPassword)
+        connectionURL,
+        connectionDriverName,
+        connectionUserName,
+        connectionPassword)
       hiveEntryOpt = Option(hiveEntry)
     }
 
@@ -273,8 +275,8 @@ object Configs {
     if (tagConfigs.isDefined) {
       for (tagConfig <- tagConfigs.get.asScala) {
         if (!tagConfig.hasPath("name") ||
-            !tagConfig.hasPath("type.source") ||
-            !tagConfig.hasPath("type.sink")) {
+          !tagConfig.hasPath("type.source") ||
+          !tagConfig.hasPath("type.sink")) {
           LOG.error("The `name` and `type` must be specified")
           break()
         }
@@ -322,15 +324,15 @@ object Configs {
 
         LOG.info(s"name ${tagName}  batch ${batch}")
         val entry = TagConfigEntry(tagName,
-                                   sourceConfig,
-                                   sinkConfig,
-                                   fields,
-                                   nebulaFields,
-                                   vertexField,
-                                   policyOpt,
-                                   batch,
-                                   partition,
-                                   checkPointPath)
+          sourceConfig,
+          sinkConfig,
+          fields,
+          nebulaFields,
+          vertexField,
+          policyOpt,
+          batch,
+          partition,
+          checkPointPath)
         LOG.info(s"Tag Config: ${entry}")
         tags += entry
       }
@@ -341,8 +343,8 @@ object Configs {
     if (edgeConfigs.isDefined) {
       for (edgeConfig <- edgeConfigs.get.asScala) {
         if (!edgeConfig.hasPath("name") ||
-            !edgeConfig.hasPath("type.source") ||
-            !edgeConfig.hasPath("type.sink")) {
+          !edgeConfig.hasPath("type.source") ||
+          !edgeConfig.hasPath("type.sink")) {
           LOG.error("The `name` and `type`must be specified")
           break()
         }
@@ -453,23 +455,23 @@ object Configs {
     }
 
     Configs(databaseEntry,
-            userEntry,
-            connectionEntry,
-            executionEntry,
-            errorEntry,
-            rateEntry,
-            sparkEntry,
-            tags.toList,
-            edges.toList,
-            hiveEntryOpt)
+      userEntry,
+      connectionEntry,
+      executionEntry,
+      errorEntry,
+      rateEntry,
+      sparkEntry,
+      tags.toList,
+      edges.toList,
+      hiveEntryOpt)
   }
 
   /**
-    * Use to category name to category value mapping.
-    *
-    * @param category name
-    * @return
-    */
+   * Use to category name to category value mapping.
+   *
+   * @param category name
+   * @return
+   */
   private[this] def toSourceCategory(category: String): SourceCategory.Value = {
     category.trim.toUpperCase match {
       case "PARQUET" => SourceCategory.PARQUET
@@ -487,11 +489,11 @@ object Configs {
   }
 
   /**
-    * Use to sink name to sink value mapping.
-    *
-    * @param category name
-    * @return
-    */
+   * Use to sink name to sink value mapping.
+   *
+   * @param category name
+   * @return
+   */
   private[this] def toSinkCategory(category: String): SinkCategory.Value = {
     category.trim.toUpperCase match {
       case "CLIENT" => SinkCategory.CLIENT
@@ -501,12 +503,12 @@ object Configs {
   }
 
   /**
-    * Use to generate data source config according to category of source.
-    *
-    * @param category
-    * @param config
-    * @return
-    */
+   * Use to generate data source config according to category of source.
+   *
+   * @param category
+   * @param config
+   * @return
+   */
   private[this] def dataSourceConfig(category: SourceCategory.Value,
                                      config: Config,
                                      nebulaConfig: Config): DataSourceConfigEntry = {
@@ -528,9 +530,9 @@ object Configs {
           else
             false
         FileBaseSourceConfigEntry(SourceCategory.CSV,
-                                  config.getString("path"),
-                                  Some(separator),
-                                  Some(header))
+          config.getString("path"),
+          Some(separator),
+          Some(header))
       case SourceCategory.HIVE =>
         HiveSourceConfigEntry(SourceCategory.HIVE, config.getString("exec"))
       case SourceCategory.NEO4J =>
@@ -575,9 +577,9 @@ object Configs {
           if (config.hasPath("interval.seconds")) config.getInt("interval.seconds")
           else DEFAULT_STREAM_INTERVAL
         KafkaSourceConfigEntry(SourceCategory.KAFKA,
-                               intervalSeconds,
-                               config.getString("service"),
-                               config.getString("topic"))
+          intervalSeconds,
+          config.getString("service"),
+          config.getString("topic"))
       case SourceCategory.PULSAR =>
         val options =
           config.getObject("options").unwrapped.asScala.map(x => x._1 -> x._2.toString).toMap
@@ -585,10 +587,10 @@ object Configs {
           if (config.hasPath("interval.seconds")) config.getInt("interval.seconds")
           else DEFAULT_STREAM_INTERVAL
         PulsarSourceConfigEntry(SourceCategory.PULSAR,
-                                intervalSeconds,
-                                config.getString("service"),
-                                config.getString("admin"),
-                                options)
+          intervalSeconds,
+          config.getString("service"),
+          config.getString("admin"),
+          options)
       case SourceCategory.HBASE =>
         val fields: ListBuffer[String] = new ListBuffer[String]
         fields.append(config.getStringList("fields").asScala: _*)
@@ -604,11 +606,11 @@ object Configs {
         }
 
         HBaseSourceConfigEntry(SourceCategory.HBASE,
-                               config.getString("host"),
-                               config.getString("port"),
-                               config.getString("table"),
-                               config.getString("columnFamily"),
-                               fields.toSet.toList)
+          config.getString("host"),
+          config.getString("port"),
+          config.getString("table"),
+          config.getString("columnFamily"),
+          fields.toSet.toList)
       case _ =>
         throw new IllegalArgumentException("Unsupported data source")
     }
@@ -619,7 +621,7 @@ object Configs {
     category match {
       case SinkCategory.CLIENT =>
         NebulaSinkConfigEntry(SinkCategory.CLIENT,
-                              nebulaConfig.getStringList("address.graph").asScala.toList)
+          nebulaConfig.getStringList("address.graph").asScala.toList)
       case SinkCategory.SST => {
         val fsNameNode = {
           if (nebulaConfig.hasPath("path.hdfs.namenode"))
@@ -630,9 +632,9 @@ object Configs {
           }
         }
         FileBaseSinkConfigEntry(SinkCategory.SST,
-                                nebulaConfig.getString("path.local"),
-                                nebulaConfig.getString("path.remote"),
-                                fsNameNode)
+          nebulaConfig.getString("path.local"),
+          nebulaConfig.getString("path.remote"),
+          fsNameNode)
       }
       case _ =>
         throw new IllegalArgumentException("Unsupported data sink")
@@ -640,12 +642,12 @@ object Configs {
   }
 
   /**
-    * Get the config list by the path.
-    *
-    * @param config The config.
-    * @param path   The path of the config.
-    * @return
-    */
+   * Get the config list by the path.
+   *
+   * @param config The config.
+   * @param path   The path of the config.
+   * @return
+   */
   private[this] def getConfigsOrNone(config: Config,
                                      path: String): Option[java.util.List[_ <: Config]] = {
     if (config.hasPath(path)) {
@@ -656,12 +658,12 @@ object Configs {
   }
 
   /**
-    * Get the config by the path.
-    *
-    * @param config
-    * @param path
-    * @return
-    */
+   * Get the config by the path.
+   *
+   * @param config
+   * @param path
+   * @return
+   */
   def getConfigOrNone(config: Config, path: String): Option[Config] = {
     if (config.hasPath(path)) {
       Some(config.getConfig(path))
@@ -671,13 +673,13 @@ object Configs {
   }
 
   /**
-    * Get the value from config by the path. If the path not exist, return the default value.
-    *
-    * @param config       The config.
-    * @param path         The path of the config.
-    * @param defaultValue The default value for the path.
-    * @return
-    */
+   * Get the value from config by the path. If the path not exist, return the default value.
+   *
+   * @param config       The config.
+   * @param path         The path of the config.
+   * @param defaultValue The default value for the path.
+   * @return
+   */
   private[this] def getOrElse[T](config: Config, path: String, defaultValue: T): T = {
     if (config.hasPath(path)) {
       config.getAnyRef(path).asInstanceOf[T]
@@ -695,15 +697,15 @@ object Configs {
   }
 
   /**
-    * Get the value from config by the path which is optional.
-    * If the path not exist, return the default value.
-    *
-    * @param config
-    * @param path
-    * @param defaultValue
-    * @tparam T
-    * @return
-    */
+   * Get the value from config by the path which is optional.
+   * If the path not exist, return the default value.
+   *
+   * @param config
+   * @param path
+   * @param defaultValue
+   * @tparam T
+   * @return
+   */
   private[this] def getOrElse[T](config: Option[Config], path: String, defaultValue: T): T = {
     if (config.isDefined && config.get.hasPath(path)) {
       config.get.getAnyRef(path).asInstanceOf[T]
@@ -713,12 +715,12 @@ object Configs {
   }
 
   /**
-    * Use to parse command line arguments.
-    *
-    * @param args
-    * @param programName
-    * @return Argument
-    */
+   * Use to parse command line arguments.
+   *
+   * @param args
+   * @param programName
+   * @return Argument
+   */
   def parser(args: Array[String], programName: String): Option[Argument] = {
     val parser = new scopt.OptionParser[Argument](programName) {
       head(programName, "2.0.0")
