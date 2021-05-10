@@ -64,6 +64,15 @@
 
     - Storage服务可用的端口号有33183、33177、33185。
 
+### 导入数据时报错`com.facebook.thrift.transport.TTransportException: xxx: Read timed out`
+
+导致该错误的原因为请求响应超时。请尝试以下方法：
+
+* 适当调小Exchange配置中的`batch`数和`partition`数，减轻服务端压力。
+* 适当调大Nebula Graph服务配置中`--conn_timeout_ms`参数的值，增加连接的超时时间。该参数的默认值为60000（ms）。调整方式如下：
+  1. 确认出现响应超时问题的Nebula Graph服务。如果错误堆栈包含`MetaClient`，则Meta服务响应超时；如果包含`GraphClient`，则Graph服务响应超时。
+  2. 根据[修改Nebula Graph配置](https://docs.nebula-graph.com.cn/2.0.1/5.configurations-and-logs/1.configurations/1.configurations/#_3)的说明，修改Meta配置或Graph配置。如果配置文件中没有`--conn_timeout_ms`参数，请手动添加。
+
 ## 配置问题
 
 ### 哪些配置项影响导入性能？
