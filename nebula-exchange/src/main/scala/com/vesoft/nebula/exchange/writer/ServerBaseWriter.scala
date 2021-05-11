@@ -154,7 +154,6 @@ class NebulaGraphClientWriter(dataBaseConfigEntry: DataBaseConfigEntry,
     } else {
       LOG.error(s"write vertex failed because write speed is too fast")
     }
-    LOG.info(sentence)
     sentence
   }
 
@@ -169,7 +168,6 @@ class NebulaGraphClientWriter(dataBaseConfigEntry: DataBaseConfigEntry,
     } else {
       LOG.error(s"write vertex failed because write speed is too fast")
     }
-    LOG.info(sentence)
     sentence
   }
 

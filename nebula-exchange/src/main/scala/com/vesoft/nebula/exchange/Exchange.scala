@@ -117,6 +117,9 @@ object Exchange {
       sys.exit(0)
     }
 
+    // record the failed batch number
+    var failures: Long = 0L
+
     // import tags
     if (configs.tagsConfig.nonEmpty) {
       for (tagConfig <- configs.tagsConfig) {
@@ -146,13 +149,12 @@ object Exchange {
           if (tagConfig.dataSinkConfigEntry.category == SinkCategory.CLIENT) {
             LOG.info(s"Client-Import: batchSuccess.${tagConfig.name}: ${batchSuccess.value}")
             LOG.info(s"Client-Import: batchFailure.${tagConfig.name}: ${batchFailure.value}")
+            failures += batchFailure.value
           } else {
             LOG.info(s"SST-Import: failure.${tagConfig.name}: ${batchFailure.value}")
           }
         }
       }
-    } else {
-      LOG.warn("Tag is not defined")
     }
 
     // import edges
@@ -182,17 +184,16 @@ object Exchange {
           if (edgeConfig.dataSinkConfigEntry.category == SinkCategory.CLIENT) {
             LOG.info(s"Client-Import: batchSuccess.${edgeConfig.name}: ${batchSuccess.value}")
             LOG.info(s"Client-Import: batchFailure.${edgeConfig.name}: ${batchFailure.value}")
+            failures += batchFailure.value
           } else {
             LOG.info(s"SST-Import: failure.${edgeConfig.name}: ${batchFailure.value}")
           }
         }
       }
-    } else {
-      LOG.warn("Edge is not defined")
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.existError(configs.errorConfig.errorPath)) {
+    if (failures > 0 && ErrorHandler.existError(configs.errorConfig.errorPath)) {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
       val data         = spark.read.text(configs.errorConfig.errorPath)
