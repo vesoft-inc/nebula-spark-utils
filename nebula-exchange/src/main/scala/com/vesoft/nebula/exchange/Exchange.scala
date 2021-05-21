@@ -50,14 +50,14 @@ final case class Argument(config: String = "application.conf",
 final case class TooManyErrorsException(private val message: String) extends Exception(message)
 
 /**
- * SparkClientGenerator is a simple spark job used to write data into Nebula Graph parallel.
- */
+  * SparkClientGenerator is a simple spark job used to write data into Nebula Graph parallel.
+  */
 object Exchange {
   private[this] val LOG = Logger.getLogger(this.getClass)
 
   def main(args: Array[String]): Unit = {
     val PROGRAM_NAME = "Nebula Graph Exchange"
-    val options = Configs.parser(args, PROGRAM_NAME)
+    val options      = Configs.parser(args, PROGRAM_NAME)
     val c: Argument = options match {
       case Some(config) => config
       case _ =>
@@ -68,9 +68,12 @@ object Exchange {
     val configs = Configs.parse(new File(c.config))
     LOG.info(s"Config ${configs}")
 
-    val reload = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
-    val reload_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp"
-    val error_tmp = s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
+    val reload =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
+    val reload_tmp =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp"
+    val error_tmp =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
 
     val session = SparkSession
       .builder()
@@ -113,7 +116,7 @@ object Exchange {
       val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reload")
       val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reload")
 
-      val data = spark.read.text(reload)
+      val data      = spark.read.text(reload)
       val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
 
@@ -145,7 +148,8 @@ object Exchange {
             spark.sparkContext.longAccumulator(s"batchFailure.${tagConfig.name}")
 
           /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
-          ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/vertices/${tagConfig.name}")
+          ErrorHandler.moveOldFilesIfExist(
+            s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/vertices/${tagConfig.name}")
 
           val processor = new VerticesProcessor(
             repartition(data.get, tagConfig.partition, tagConfig.dataSourceConfigEntry.category),
@@ -183,7 +187,8 @@ object Exchange {
           val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.${edgeConfig.name}")
 
           /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
-          ErrorHandler.moveOldFilesIfExist(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/edges/${edgeConfig.name}")
+          ErrorHandler.moveOldFilesIfExist(
+            s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/edges/${edgeConfig.name}")
 
           val processor = new EdgeProcessor(
             repartition(data.get, edgeConfig.partition, edgeConfig.dataSourceConfigEntry.category),
@@ -208,12 +213,13 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.fileExists(s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
-      val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
-      val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
-      var data_tmp: DataFrame = null
-      var data_reload: DataFrame = null
-      var data_reload_tmp:DataFrame = null
+    if (ErrorHandler.fileExists(
+          s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
+      val batchSuccess               = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
+      val batchFailure               = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
+      var data_tmp: DataFrame        = null
+      var data_reload: DataFrame     = null
+      var data_reload_tmp: DataFrame = null
       if (ErrorHandler.fileExists(error_tmp)) {
         data_tmp = spark.read.text(s"${error_tmp}/*/*/*")
       }
@@ -221,7 +227,7 @@ object Exchange {
         data_reload = spark.read.text(reload)
       }
       /*Old Files will exist only when the program exited abnormally last time, so it is necessary to remove old files*/
-      if(ErrorHandler.fileExists(reload_tmp)){
+      if (ErrorHandler.fileExists(reload_tmp)) {
         ErrorHandler.moveOldFilesIfExist(reload_tmp)
         data_reload_tmp = spark.read.text(s"${reload_tmp}_old*")
       }
@@ -229,8 +235,8 @@ object Exchange {
         sys.exit(0)
       }
 
-      val df_set = Set(data_tmp,data_reload,data_reload_tmp)
-      val data = df_set.filter(_!=null).reduce(_.union(_)).distinct()
+      val df_set = Set(data_tmp, data_reload, data_reload_tmp)
+      val data   = df_set.filter(_ != null).reduce(_.union(_)).distinct()
 
       val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
@@ -250,16 +256,16 @@ object Exchange {
   }
 
   /**
-   * Create data source for different data type.
-   *
-   * @param session The Spark Session.
-   * @param config  The config.
-   * @return
-   */
+    * Create data source for different data type.
+    *
+    * @param session The Spark Session.
+    * @param config  The config.
+    * @return
+    */
   private[this] def createDataSource(
-                                      session: SparkSession,
-                                      config: DataSourceConfigEntry
-                                    ): Option[DataFrame] = {
+      session: SparkSession,
+      config: DataSourceConfigEntry
+  ): Option[DataFrame] = {
     config.category match {
       case SourceCategory.PARQUET =>
         val parquetConfig = config.asInstanceOf[FileBaseSourceConfigEntry]
@@ -310,11 +316,11 @@ object Exchange {
         Some(reader.read())
       case SourceCategory.JANUS_GRAPH =>
         val janusGraphSourceConfigEntry = config.asInstanceOf[JanusGraphSourceConfigEntry]
-        val reader = new JanusGraphReader(session, janusGraphSourceConfigEntry)
+        val reader                      = new JanusGraphReader(session, janusGraphSourceConfigEntry)
         Some(reader.read())
       case SourceCategory.HBASE =>
         val hbaseSourceConfigEntry = config.asInstanceOf[HBaseSourceConfigEntry]
-        val reader = new HBaseReader(session, hbaseSourceConfigEntry)
+        val reader                 = new HBaseReader(session, hbaseSourceConfigEntry)
         Some(reader.read())
       case _ => {
         LOG.error(s"Data source ${config.category} not supported")
@@ -324,12 +330,12 @@ object Exchange {
   }
 
   /**
-   * Repartition the data frame using the specified partition number.
-   *
-   * @param frame
-   * @param partition
-   * @return
-   */
+    * Repartition the data frame using the specified partition number.
+    *
+    * @param frame
+    * @param partition
+    * @return
+    */
   private[this] def repartition(frame: DataFrame,
                                 partition: Int,
                                 sourceCategory: SourceCategory.Value): DataFrame = {

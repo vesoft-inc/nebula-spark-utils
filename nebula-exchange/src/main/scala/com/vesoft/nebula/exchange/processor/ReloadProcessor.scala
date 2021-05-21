@@ -21,7 +21,7 @@ class ReloadProcessor(data: DataFrame,
                       config: Configs,
                       batchSuccess: LongAccumulator,
                       batchFailure: LongAccumulator)
-  extends Processor {
+    extends Processor {
   private[this] lazy val LOG = Logger.getLogger(this.getClass)
 
   override def process(): Unit = {
@@ -34,8 +34,8 @@ class ReloadProcessor(data: DataFrame,
     if (session == null) {
       throw new IllegalArgumentException("connect to graph failed.")
     }
-    val switchResult = graphProvider.switchSpace(session,config.databaseConfig.space)
-    if(!switchResult){
+    val switchResult = graphProvider.switchSpace(session, config.databaseConfig.space)
+    if (!switchResult) {
       throw new RuntimeException("Swtich Space Failed")
     }
     LOG.info(s"Connection to ${config.databaseConfig.metaAddresses}")
@@ -53,12 +53,11 @@ class ReloadProcessor(data: DataFrame,
       }
     })
     if (errorBuffer.nonEmpty) {
-      ErrorHandler.save(errorBuffer,
-        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/reload_tmp/reload.${TaskContext.getPartitionId()}")
+      ErrorHandler.save(
+        errorBuffer,
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/reload_tmp/reload.${TaskContext.getPartitionId()}"
+      )
       errorBuffer.clear()
-    }else{
-
-    }
+    } else {}
   }
 }
-

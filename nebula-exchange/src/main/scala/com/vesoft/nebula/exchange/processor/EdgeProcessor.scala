@@ -48,7 +48,7 @@ class EdgeProcessor(data: DataFrame,
                     config: Configs,
                     batchSuccess: LongAccumulator,
                     batchFailure: LongAccumulator)
-  extends Processor {
+    extends Processor {
 
   @transient
   private[this] lazy val LOG = Logger.getLogger(this.getClass)
@@ -59,12 +59,12 @@ class EdgeProcessor(data: DataFrame,
   private def processEachPartition(iterator: Iterator[Edge]): Unit = {
     val graphProvider = new GraphProvider(config.databaseConfig.getGraphAddress)
     val writer = new NebulaGraphClientWriter(config.databaseConfig,
-      config.userConfig,
-      config.connectionConfig,
-      config.executionConfig.retry,
-      config.rateConfig,
-      edgeConfig,
-      graphProvider)
+                                             config.userConfig,
+                                             config.connectionConfig,
+                                             config.executionConfig.retry,
+                                             config.rateConfig,
+                                             edgeConfig,
+                                             graphProvider)
     val errorBuffer = ArrayBuffer[String]()
 
     writer.prepare()
@@ -83,7 +83,8 @@ class EdgeProcessor(data: DataFrame,
     if (errorBuffer.nonEmpty) {
       ErrorHandler.save(
         errorBuffer,
-        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/edges/${edgeConfig.name}/${edgeConfig.name}.${TaskContext.getPartitionId}")
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/edges/${edgeConfig.name}/${edgeConfig.name}.${TaskContext.getPartitionId}"
+      )
       errorBuffer.clear()
     }
     LOG.info(
@@ -190,17 +191,17 @@ class EdgeProcessor(data: DataFrame,
               dstId.getBytes()
             }
             val positiveEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
-              partitionId,
-              srcBytes,
-              edgeItem.getEdge_type,
-              ranking,
-              dstBytes)
+                                                            partitionId,
+                                                            srcBytes,
+                                                            edgeItem.getEdge_type,
+                                                            ranking,
+                                                            dstBytes)
             val reverseEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
-              partitionId,
-              dstBytes,
-              -edgeItem.getEdge_type,
-              ranking,
-              srcBytes)
+                                                           partitionId,
+                                                           dstBytes,
+                                                           -edgeItem.getEdge_type,
+                                                           ranking,
+                                                           srcBytes)
 
             val values = for {
               property <- fieldKeys if property.trim.length != 0
@@ -283,11 +284,11 @@ class EdgeProcessor(data: DataFrame,
               sourceField = NebulaUtils.escapeUtil(sourceField).mkString("\"", "", "\"")
             } else {
               assert(NebulaUtils.isNumic(sourceField),
-                s"space vidType is int, but your srcId $sourceField is not numeric.")
+                     s"space vidType is int, but your srcId $sourceField is not numeric.")
             }
           } else {
             assert(!isVidStringType,
-              "only int vidType can use policy, but your vidType is FIXED_STRING.")
+                   "only int vidType can use policy, but your vidType is FIXED_STRING.")
           }
 
           val targetIndex = row.schema.fieldIndex(edgeConfig.targetField)
@@ -301,11 +302,11 @@ class EdgeProcessor(data: DataFrame,
               targetField = NebulaUtils.escapeUtil(targetField).mkString("\"", "", "\"")
             } else {
               assert(NebulaUtils.isNumic(targetField),
-                s"space vidType is int, but your dstId $targetField is not numeric.")
+                     s"space vidType is int, but your dstId $targetField is not numeric.")
             }
           } else {
             assert(!isVidStringType,
-              "only int vidType can use policy, but your vidType is FIXED_STRING.")
+                   "only int vidType can use policy, but your vidType is FIXED_STRING.")
           }
 
           val values = for {
