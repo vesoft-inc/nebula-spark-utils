@@ -45,7 +45,7 @@ final case class Argument(config: String = "application.conf",
                           hive: Boolean = false,
                           directly: Boolean = false,
                           dry: Boolean = false,
-                          reload: String = "")
+                          reload: Boolean = false)
 
 final case class TooManyErrorsException(private val message: String) extends Exception(message)
 
@@ -53,7 +53,10 @@ final case class TooManyErrorsException(private val message: String) extends Exc
   * SparkClientGenerator is a simple spark job used to write data into Nebula Graph parallel.
   */
 object Exchange {
-  private[this] val LOG = Logger.getLogger(this.getClass)
+  private[this] val LOG                = Logger.getLogger(this.getClass)
+  private[this] var reload: String     = null
+  private[this] var reload_tmp: String = null
+  private[this] var error_tmp: String  = null
 
   def main(args: Array[String]): Unit = {
     val PROGRAM_NAME = "Nebula Graph Exchange"
@@ -67,6 +70,13 @@ object Exchange {
 
     val configs = Configs.parse(new File(c.config))
     LOG.info(s"Config ${configs}")
+
+    reload =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload/"
+    reload_tmp =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/reload_tmp"
+    error_tmp =
+      s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp"
 
     val session = SparkSession
       .builder()
@@ -105,15 +115,8 @@ object Exchange {
     val spark = session.getOrCreate()
 
     // reload for failed import tasks
-    if (!c.reload.isEmpty) {
-      val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reload")
-      val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reload")
-
-      val data      = spark.read.text(c.reload)
-      val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
-      processor.process()
-      LOG.info(s"batchSuccess.reload: ${batchSuccess.value}")
-      LOG.info(s"batchFailure.reload: ${batchFailure.value}")
+    if (c.reload) {
+      reimportFailBatches(spark, configs)
       sys.exit(0)
     }
 
@@ -133,6 +136,10 @@ object Exchange {
             spark.sparkContext.longAccumulator(s"batchSuccess.${tagConfig.name}")
           val batchFailure =
             spark.sparkContext.longAccumulator(s"batchFailure.${tagConfig.name}")
+
+          /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          ErrorHandler.moveOldFilesIfExist(
+            s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/vertices/${tagConfig.name}")
 
           val processor = new VerticesProcessor(
             repartition(data.get, tagConfig.partition, tagConfig.dataSourceConfigEntry.category),
@@ -169,6 +176,10 @@ object Exchange {
           val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.${edgeConfig.name}")
           val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.${edgeConfig.name}")
 
+          /*Old Files will exist only when the program exited abnormally last time, so it is necessary to move old files to tmp directory, once the program runs normally,all files will be removed*/
+          ErrorHandler.moveOldFilesIfExist(
+            s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}/tmp/edges/${edgeConfig.name}")
+
           val processor = new EdgeProcessor(
             repartition(data.get, edgeConfig.partition, edgeConfig.dataSourceConfigEntry.category),
             edgeConfig,
@@ -192,17 +203,51 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (ErrorHandler.existError(configs.errorConfig.errorPath)) {
-      val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
-      val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
-      val data         = spark.read.text(configs.errorConfig.errorPath)
-      val processor    = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
+    reimportFailBatches(spark, configs)
+
+    spark.close()
+    sys.exit(0)
+  }
+
+  private[this] def reimportFailBatches(spark: SparkSession, configs: Configs): Unit = {
+    if (ErrorHandler.fileExists(
+          s"${configs.errorConfig.errorPath}/${configs.errorConfig.errorPathId}/${configs.databaseConfig.space}")) {
+      val batchSuccess               = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
+      val batchFailure               = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
+      var data_tmp: DataFrame        = null
+      var data_reload: DataFrame     = null
+      var data_reload_tmp: DataFrame = null
+      if (ErrorHandler.fileExists(error_tmp)) {
+        data_tmp = spark.read.text(s"${error_tmp}/*/*/*")
+      }
+      if (ErrorHandler.fileExists(reload)) {
+        data_reload = spark.read.text(reload)
+      }
+      /*Old Files will exist only when the program exited abnormally last time, so it is necessary to remove old files*/
+      if (ErrorHandler.fileExists(reload_tmp)) {
+        ErrorHandler.moveOldFilesIfExist(reload_tmp)
+        data_reload_tmp = spark.read.text(s"${reload_tmp}_old*")
+      }
+      if (data_tmp == null && data_reload == null && data_reload_tmp == null) {
+        sys.exit(0)
+      }
+
+      val df_set = Set(data_tmp, data_reload, data_reload_tmp)
+      val data   = df_set.filter(_ != null).reduce(_.union(_)).distinct()
+
+      val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
       processor.process()
+
+      ErrorHandler.remove(error_tmp)
+      ErrorHandler.remove(reload)
+      ErrorHandler.removeWithPathPattern(s"${reload_tmp}_old*")
+
+      if (ErrorHandler.fileExists(reload_tmp)) {
+        ErrorHandler.rename(reload_tmp, reload)
+      }
       LOG.info(s"batchSuccess.reimport: ${batchSuccess.value}")
       LOG.info(s"batchFailure.reimport: ${batchFailure.value}")
     }
-    spark.close()
-    sys.exit(0)
   }
 
   /**

@@ -6,8 +6,11 @@
 
 package com.vesoft.nebula.exchange.processor
 
+import java.util.UUID
+
 import com.vesoft.nebula.exchange.{ErrorHandler, GraphProvider}
 import com.vesoft.nebula.exchange.config.Configs
+import org.apache.log4j.Logger
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.util.LongAccumulator
@@ -19,6 +22,7 @@ class ReloadProcessor(data: DataFrame,
                       batchSuccess: LongAccumulator,
                       batchFailure: LongAccumulator)
     extends Processor {
+  private[this] lazy val LOG = Logger.getLogger(this.getClass)
 
   override def process(): Unit = {
     data.foreachPartition(processEachPartition(_))
@@ -30,6 +34,11 @@ class ReloadProcessor(data: DataFrame,
     if (session == null) {
       throw new IllegalArgumentException("connect to graph failed.")
     }
+    val switchResult = graphProvider.switchSpace(session, config.databaseConfig.space)
+    if (!switchResult) {
+      throw new RuntimeException("Swtich Space Failed")
+    }
+    LOG.info(s"Connection to ${config.databaseConfig.metaAddresses}")
 
     val errorBuffer = ArrayBuffer[String]()
 
@@ -44,9 +53,11 @@ class ReloadProcessor(data: DataFrame,
       }
     })
     if (errorBuffer.nonEmpty) {
-      ErrorHandler.save(errorBuffer,
-                        s"${config.errorConfig.errorPath}/reload.${TaskContext.getPartitionId()}")
+      ErrorHandler.save(
+        errorBuffer,
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/reload_tmp/reload.${TaskContext.getPartitionId()}"
+      )
       errorBuffer.clear()
-    }
+    } else {}
   }
 }

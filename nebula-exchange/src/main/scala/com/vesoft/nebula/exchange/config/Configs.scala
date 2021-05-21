@@ -102,8 +102,8 @@ case class ExecutionConfigEntry(timeout: Int, retry: Int, interval: Int) {
   * @param errorPath
   * @param errorMaxSize
   */
-case class ErrorConfigEntry(errorPath: String, errorMaxSize: Int) {
-  require(errorPath.trim.nonEmpty && errorMaxSize > 0)
+case class ErrorConfigEntry(errorPath: String, errorMaxSize: Int, errorPathId: Int) {
+  require(errorPath.trim.nonEmpty && errorMaxSize > 0 && errorPathId > 0)
 
   override def toString: String = super.toString
 }
@@ -193,6 +193,7 @@ object Configs {
   private[this] val DEFAULT_EXECUTION_INTERVAL   = 3000
   private[this] val DEFAULT_ERROR_OUTPUT_PATH    = "/tmp/nebula.writer.errors/"
   private[this] val DEFAULT_ERROR_MAX_BATCH_SIZE = Int.MaxValue
+  private[this] val DEFAULT_ERROR_PATH_ID        = 0
   private[this] val DEFAULT_RATE_LIMIT           = 1024
   private[this] val DEFAULT_RATE_TIMEOUT         = 100
   private[this] val DEFAULT_EDGE_RANKING         = 0L
@@ -244,7 +245,8 @@ object Configs {
     val errorConfig  = getConfigOrNone(nebulaConfig, "error")
     val errorPath    = getOrElse(errorConfig, "output", DEFAULT_ERROR_OUTPUT_PATH)
     val errorMaxSize = getOrElse(errorConfig, "max", DEFAULT_ERROR_MAX_BATCH_SIZE)
-    val errorEntry   = ErrorConfigEntry(errorPath, errorMaxSize)
+    val errorPathId  = getOrElse(errorConfig, "path_id", DEFAULT_ERROR_PATH_ID)
+    val errorEntry   = ErrorConfigEntry(errorPath, errorMaxSize, errorPathId)
 
     val rateConfig  = getConfigOrNone(nebulaConfig, "rate")
     val rateLimit   = getOrElse(rateConfig, "limit", DEFAULT_RATE_LIMIT)
@@ -741,9 +743,8 @@ object Configs {
         .action((_, c) => c.copy(dry = true))
         .text("dry run")
 
-      opt[String]('r', "reload")
-        .valueName("<path>")
-        .action((x, c) => c.copy(reload = x))
+      opt[Unit]('r', "reload")
+        .action((x, c) => c.copy(reload = true))
         .text("reload path")
     }
     parser.parse(args, Argument())

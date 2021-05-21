@@ -6,15 +6,19 @@
 
 package com.vesoft.nebula.exchange
 
+import java.io.IOException
+import org.apache.commons.lang.exception.ExceptionUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.log4j.Logger
+
 import scala.collection.mutable.ArrayBuffer
 
 object ErrorHandler {
+  private[this] lazy val LOG        = Logger.getLogger(this.getClass)
+  private[this] lazy val fileSystem = FileSystem.get(new Configuration())
   def save(buffer: ArrayBuffer[String], path: String): Unit = {
-    val fileSystem = FileSystem.get(new Configuration())
-    val errors     = fileSystem.create(new Path(path))
-
+    val errors = fileSystem.create(new Path(path))
     try {
       for (error <- buffer) {
         errors.writeBytes(error)
@@ -25,8 +29,59 @@ object ErrorHandler {
     }
   }
 
-  def existError(path: String): Boolean = {
-    val fileSystem = FileSystem.get(new Configuration())
-    fileSystem.exists(new Path(path))
+  def remove(path: String): Boolean = {
+    remove(new Path(path))
   }
+
+  def remove(path: Path): Boolean = {
+    var result = false
+    try {
+      result = fileSystem.delete(path, true)
+      LOG.info(s"Remove File Path $path succeed")
+    } catch {
+      case e: IOException => LOG.error(s"Remove File Path $path failed")
+      case e: Exception   => LOG.error(ExceptionUtils.getFullStackTrace(e))
+    }
+    result
+  }
+
+  def removeWithPathPattern(path: String) = {
+    val fileStatus = fileSystem.globStatus(new Path(path))
+    for (fs <- fileStatus) {
+      remove(fs.getPath)
+    }
+  }
+
+  def fileExists(path: String): Boolean = {
+    val fileSystem = FileSystem.get(new Configuration())
+    val existed    = fileSystem.exists(new Path(path))
+    if (!existed) {
+      false
+    } else {
+      fileSystem.listFiles(new Path(path), true).hasNext
+    }
+  }
+
+  def rename(src: String, dst: String) = {
+    val result = fileSystem.rename(new Path(src), new Path(dst))
+    LOG.info(s"Rename File Path From $src To $dst")
+    result
+  }
+
+  def moveOldFilesIfExist(path: String): Unit = {
+    val origin = path
+    if (fileExists(origin)) {
+      var index    = 1
+      var continue = true
+      while (continue) {
+        if (fileExists(s"${origin}_old_$index")) {
+          index += 1
+        } else {
+          rename(origin, s"${origin}_old_$index")
+          continue = false
+        }
+      }
+    }
+  }
+
 }

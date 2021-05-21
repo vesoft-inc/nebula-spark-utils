@@ -91,7 +91,8 @@ class VerticesProcessor(data: DataFrame,
     if (errorBuffer.nonEmpty) {
       ErrorHandler.save(
         errorBuffer,
-        s"${config.errorConfig.errorPath}/${tagConfig.name}.${TaskContext.getPartitionId()}")
+        s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/tmp/vertices/${tagConfig.name}/${tagConfig.name}.${TaskContext.getPartitionId()}"
+      )
       errorBuffer.clear()
     }
     LOG.info(
