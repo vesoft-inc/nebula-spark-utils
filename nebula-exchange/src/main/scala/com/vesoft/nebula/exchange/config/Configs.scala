@@ -743,9 +743,8 @@ object Configs {
         .action((_, c) => c.copy(dry = true))
         .text("dry run")
 
-      opt[String]('r', "reload")
-        .valueName("<path>")
-        .action((x, c) => c.copy(reload = x))
+      opt[Unit]('r', "reload")
+        .action((x, c) => c.copy(reload = true))
         .text("reload path")
     }
     parser.parse(args, Argument())
