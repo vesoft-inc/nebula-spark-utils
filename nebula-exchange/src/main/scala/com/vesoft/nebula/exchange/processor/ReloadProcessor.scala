@@ -36,9 +36,9 @@ class ReloadProcessor(data: DataFrame,
     }
     val switchResult = graphProvider.switchSpace(session, config.databaseConfig.space)
     if (!switchResult) {
-      throw new RuntimeException("Swtich Space Failed")
+      throw new RuntimeException("Switch Space Failed")
     }
-    LOG.info(s"Connection to ${config.databaseConfig.metaAddresses}")
+    LOG.info(s"Connect to ${config.databaseConfig.graphAddress}")
 
     val errorBuffer = ArrayBuffer[String]()
 
@@ -58,6 +58,6 @@ class ReloadProcessor(data: DataFrame,
         s"${config.errorConfig.errorPath}/${config.errorConfig.errorPathId}/${config.databaseConfig.space}/reload_tmp/reload.${TaskContext.getPartitionId()}"
       )
       errorBuffer.clear()
-    } else {}
+    }
   }
 }

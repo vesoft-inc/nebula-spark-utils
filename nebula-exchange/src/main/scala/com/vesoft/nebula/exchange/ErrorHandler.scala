@@ -63,9 +63,8 @@ object ErrorHandler {
   }
 
   def rename(src: String, dst: String) = {
-    val result = fileSystem.rename(new Path(src), new Path(dst))
+    fileSystem.rename(new Path(src), new Path(dst))
     LOG.info(s"Rename File Path From $src To $dst")
-    result
   }
 
   def moveOldFilesIfExist(path: String): Unit = {
