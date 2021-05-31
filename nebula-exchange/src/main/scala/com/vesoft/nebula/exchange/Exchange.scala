@@ -155,6 +155,8 @@ object Exchange {
           }
         }
       }
+    } else {
+      LOG.warn("Tag is not defined")
     }
 
     // import edges
@@ -190,6 +192,8 @@ object Exchange {
           }
         }
       }
+    } else {
+      LOG.warn("Edge is not defined")
     }
 
     // reimport for failed tags and edges
