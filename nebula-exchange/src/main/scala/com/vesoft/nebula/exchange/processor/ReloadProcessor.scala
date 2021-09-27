@@ -35,7 +35,6 @@ class ReloadProcessor(data: DataFrame,
     val writer = new NebulaGraphClientWriter(config.databaseConfig,
                                              config.userConfig,
                                              config.rateConfig,
-                                             null,
                                              graphProvider)
 
     val errorBuffer = ArrayBuffer[String]()

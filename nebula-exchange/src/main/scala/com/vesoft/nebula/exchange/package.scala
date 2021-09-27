@@ -84,6 +84,26 @@ package object exchange {
     }
   }
 
+  case class MultiInputs(vertices: Option[Map[String, Vertex]],
+                         edges: Option[Map[String, Edge]]) {
+    override def toString: String = {
+      val verticesStr = if (!vertices.isEmpty) {
+          vertices.get.toList.map(t => "    tag name: " + t._1.toString + " : " + t._2.toString).mkString("\n")
+        } else {
+          "    Empty vertices\n"
+        }
+      val edgesStr = if(!edges.isEmpty) {
+        edges.get.toList.map(t => "    edge name: " + t._1.toString + " : " +t._2.toString).mkString("\n")
+      } else {
+        "    Empty edges\n"
+      }
+
+      "MultiInputs have some vertices and some edges. \n" +
+      "Vertices: \n" + verticesStr + 
+      "\nEdges: \n" + edgesStr
+    }
+  }
+
   object KeyPolicy extends Enumeration {
     type POLICY = Value
     val HASH = Value("hash")

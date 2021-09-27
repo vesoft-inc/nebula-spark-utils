@@ -62,7 +62,6 @@ class EdgeProcessor(data: DataFrame,
     val writer = new NebulaGraphClientWriter(config.databaseConfig,
                                              config.userConfig,
                                              config.rateConfig,
-                                             edgeConfig,
                                              graphProvider)
     val errorBuffer = ArrayBuffer[String]()
 
@@ -71,7 +70,7 @@ class EdgeProcessor(data: DataFrame,
     val startTime = System.currentTimeMillis
     iterator.grouped(edgeConfig.batch).foreach { edge =>
       val edges         = Edges(nebulaKeys, edge.toList, edgeConfig.sourcePolicy, edgeConfig.targetPolicy)
-      val failStatement = writer.writeEdges(edges)
+      val failStatement = writer.writeEdges(edges, edgeConfig.name)
       if (failStatement == null) {
         batchSuccess.add(1)
       } else {
@@ -112,14 +111,7 @@ class EdgeProcessor(data: DataFrame,
       val spaceVidLen = metaProvider.getSpaceVidLen(space)
       val edgeItem    = metaProvider.getEdgeItem(space, edgeName)
 
-      val distintData = if (edgeConfig.rankingField.isDefined) {
-        data.dropDuplicates(edgeConfig.sourceField,
-                            edgeConfig.targetField,
-                            edgeConfig.rankingField.get)
-      } else {
-        data.dropDuplicates(edgeConfig.sourceField, edgeConfig.targetField)
-      }
-      distintData
+      data
         .mapPartitions { iter =>
           iter.map { row =>
             val srcIndex: Int = row.schema.fieldIndex(edgeConfig.sourceField)
@@ -163,8 +155,6 @@ class EdgeProcessor(data: DataFrame,
 
             val ranking: Long = if (edgeConfig.rankingField.isDefined) {
               val rankIndex = row.schema.fieldIndex(edgeConfig.rankingField.get)
-              assert(rankIndex >= 0 && !row.isNullAt(rankIndex),
-                s"rank must exist and cannot be null, your row data is $row")
               row.get(rankIndex).toString.toLong
             } else {
               0

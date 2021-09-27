@@ -108,9 +108,9 @@ abstract class ServerBaseWriter extends Writer {
     BATCH_INSERT_TEMPLATE.format(Type.EDGE.toString, name, edges.propertyNames, values)
   }
 
-  def writeVertices(vertices: Vertices): String
+  def writeVertices(vertices: Vertices, schemaName: String): String
 
-  def writeEdges(edges: Edges): String
+  def writeEdges(edges: Edges, schemaName: String): String
 
   def writeNgql(ngql: String): String
 }
@@ -121,7 +121,6 @@ abstract class ServerBaseWriter extends Writer {
 class NebulaGraphClientWriter(dataBaseConfigEntry: DataBaseConfigEntry,
                               userConfigEntry: UserConfigEntry,
                               rateConfig: RateConfigEntry,
-                              config: SchemaConfigEntry,
                               graphProvider: GraphProvider)
     extends ServerBaseWriter {
   private val LOG = Logger.getLogger(this.getClass)
@@ -145,8 +144,8 @@ class NebulaGraphClientWriter(dataBaseConfigEntry: DataBaseConfigEntry,
     LOG.info(s"Connection to ${dataBaseConfigEntry.graphAddress}")
   }
 
-  override def writeVertices(vertices: Vertices): String = {
-    val sentence = toExecuteSentence(config.name, vertices)
+  override def writeVertices(vertices: Vertices, schemaName: String): String = {
+    val sentence = toExecuteSentence(schemaName, vertices)
     if (rateLimiter.tryAcquire(rateConfig.timeout, TimeUnit.MILLISECONDS)) {
       val result = graphProvider.submit(session, sentence)
       if (result.isSucceeded) {
@@ -160,8 +159,8 @@ class NebulaGraphClientWriter(dataBaseConfigEntry: DataBaseConfigEntry,
     sentence
   }
 
-  override def writeEdges(edges: Edges): String = {
-    val sentence = toExecuteSentence(config.name, edges)
+  override def writeEdges(edges: Edges, schemaName: String): String = {
+    val sentence = toExecuteSentence(schemaName, edges)
     if (rateLimiter.tryAcquire(rateConfig.timeout, TimeUnit.MILLISECONDS)) {
       val result = graphProvider.submit(session, sentence)
       if (result.isSucceeded) {
@@ -253,9 +252,9 @@ class NebulaStorageClientWriter(addresses: List[(String, Int)], space: String)
 
   override def prepare(): Unit = {}
 
-  override def writeVertices(vertices: Vertices): String = ???
+  override def writeVertices(vertices: Vertices, schemaName: String): String = ???
 
-  override def writeEdges(edges: Edges): String = ???
+  override def writeEdges(edges: Edges, schemaName: String): String = ???
 
   override def writeNgql(ngql: String): String = ???
 

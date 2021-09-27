@@ -18,7 +18,8 @@ import com.vesoft.nebula.exchange.config.{
   MySQLSourceConfigEntry,
   Neo4JSourceConfigEntry,
   SinkCategory,
-  SourceCategory
+  SourceCategory,
+  KafkaReloadCategory
 }
 import com.vesoft.nebula.exchange.{Argument, KeyPolicy}
 import org.apache.log4j.Logger
@@ -51,6 +52,7 @@ class ConfigsSuite {
     val tagsConfig          = configs.tagsConfig
     val edgesConfig         = configs.edgesConfig
     val hiveConfigEntry     = configs.hiveConfigEntry
+    val kafkaConfigOpt      = configs.kafkaConfigEntry
 
     assert(dataBaseConfigEntry.graphAddress.size == 3)
     assert(dataBaseConfigEntry.metaAddresses.size == 3)
@@ -84,6 +86,19 @@ class ConfigsSuite {
           .equals("hdfs://NAMENODE_IP:9000/apps/svr/hive-xxx/warehouse/"))
     }
 
+    if (kafkaConfigOpt.isDefined) {
+      val kafkaConfigEntry = kafkaConfigOpt.get
+      assert(kafkaConfigEntry.intervalSeconds == 10)
+      assert(kafkaConfigEntry.server == "kafka.service.address")
+      assert(kafkaConfigEntry.topic == "topic-name")
+      assert(kafkaConfigEntry.partition == 10)
+      assert(kafkaConfigEntry.batch == 1000)
+      assert(kafkaConfigEntry.verbose)
+      assert(kafkaConfigEntry.reloadEntry.isDefined)
+      assert(kafkaConfigEntry.reloadEntry.get.retry == 5)
+      assert(kafkaConfigEntry.reloadEntry.get.reload ==  KafkaReloadCategory.CONTINUE)
+    }
+
     for (tagConfig <- tagsConfig) {
       val source = tagConfig.dataSourceConfigEntry
       val sink   = tagConfig.dataSinkConfigEntry
@@ -98,6 +113,7 @@ class ConfigsSuite {
       if (policy.isDefined) {
         assert(policy.get == KeyPolicy.UUID || policy.get == KeyPolicy.HASH)
       }
+
 
       val nebulaFields = tagConfig.nebulaFields
       val fields       = tagConfig.fields
