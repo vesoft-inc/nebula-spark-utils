@@ -18,7 +18,7 @@ import scala.collection.mutable
 class MetaProvider(addresses: List[Address]) extends AutoCloseable {
 
   val metaAddress = addresses.map(address => new HostAddress(address._1, address._2)).asJava
-  val client      = new MetaClient(metaAddress)
+  val client      = new MetaClient(metaAddress,6000,3,3)
   client.connect()
 
   def getPartitionNumber(space: String): Int = {
