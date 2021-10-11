@@ -15,13 +15,10 @@ import com.vesoft.nebula.meta.{PropertyType, Schema}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class MetaProvider(addresses: List[Address]) extends AutoCloseable {
+class MetaProvider(addresses: List[Address], timeout:Int, connectionRetry:Int, executionRetry:Int) extends AutoCloseable {
 
-  private val DEFAULT_TIMEOUT_MS = 6000
-  private val DEFAULT_CONNECTION_RETRY_SIZE = 3
-  private val DEFAULT_EXECUTION_RETRY_SIZE = 3
   val metaAddress = addresses.map(address => new HostAddress(address._1, address._2)).asJava
-  val client      = new MetaClient(metaAddress,DEFAULT_TIMEOUT_MS,DEFAULT_CONNECTION_RETRY_SIZE,DEFAULT_EXECUTION_RETRY_SIZE)
+  val client      = new MetaClient(metaAddress,timeout,connectionRetry,executionRetry)
   client.connect()
 
   def getPartitionNumber(space: String): Int = {
