@@ -167,7 +167,9 @@ class EdgeProcessor(data: DataFrame,
               hostAddrs.append(new HostAddress(addr.getHostText, addr.getPort))
             }
 
-            val partitionId = NebulaUtils.getPartitionId(srcId, partitionNum, vidType)
+            val posPartitionId = NebulaUtils.getPartitionId(srcId, partitionNum, vidType)
+            val revPartitionId = NebulaUtils.getPartitionId(dstId, partitionNum, vidType)
+
             val codec       = new NebulaCodecImpl()
 
             import java.nio.ByteBuffer
@@ -191,13 +193,13 @@ class EdgeProcessor(data: DataFrame,
               dstId.getBytes()
             }
             val positiveEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
-                                                            partitionId,
+                                                            posPartitionId,
                                                             srcBytes,
                                                             edgeItem.getEdge_type,
                                                             ranking,
                                                             dstBytes)
             val reverseEdgeKey = codec.edgeKeyByDefaultVer(spaceVidLen,
-                                                           partitionId,
+                                                           revPartitionId,
                                                            dstBytes,
                                                            -edgeItem.getEdge_type,
                                                            ranking,
