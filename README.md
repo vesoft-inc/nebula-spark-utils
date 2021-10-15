@@ -16,8 +16,9 @@ nebula-spark-utils 仓库包含 Nebula 的三个产品：Nebula Exchange、Nebul
 
 nebula-spark-utils repository contains code of three nebula products: Nebula Exchange, Nebula Spark Connector, Nebula Algorithm.
 
-In order to make product management more convenient, we decided to split the three products into three repositories. 
-Please go to the following url to use different products.
+In order for better version release and management, the team decided to split the current repository into three independent repositories.
+
+Please choose the correct repository for use:
 
 * Nebula Exchange: https://github.com/vesoft-inc/nebula-exchange
 * Nebula Spark Connector: https://github.com/vesoft-inc/nebula-spark-connector
