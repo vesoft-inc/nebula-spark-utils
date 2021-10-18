@@ -33,6 +33,13 @@ object SourceCategory extends Enumeration {
   val PULSAR = Value("PULSAR")
 }
 
+object KafkaReloadCategory extends Enumeration {
+  type Type     = Value
+  val ONLYONCE  = Value("ONLYONCE")
+  val CONTINUE  = Value("CONTINUE")
+  val NEEDRETRY = Value("NEEDRETRY")
+}
+
 class SourceCategory
 
 /**
@@ -159,6 +166,21 @@ case class MySQLSourceConfigEntry(override val category: SourceCategory.Value,
 }
 
 /**
+  * kafka reload entry
+  *
+  * @param reload
+  * @param times
+  */
+case class KafkaRetryConfigEntry(reload: KafkaReloadCategory.Value,
+                                 retry: Int) {
+  require(retry > 0)
+
+  override def toString: String = {
+    s"reload pattern:$reload " +
+    s"retry times:$retry"
+  }
+}
+/**
   * TODO: Support more config item about Kafka Consumer
   *
   * @param server
@@ -167,12 +189,23 @@ case class MySQLSourceConfigEntry(override val category: SourceCategory.Value,
 case class KafkaSourceConfigEntry(override val category: SourceCategory.Value,
                                   override val intervalSeconds: Int,
                                   server: String,
-                                  topic: String)
+                                  topic: String,
+                                  batch: Int,
+                                  partition: Int,
+                                  verbose: Boolean,
+                                  reloadEntry: Option[KafkaRetryConfigEntry])
     extends StreamingDataSourceConfigEntry {
   require(server.trim.nonEmpty && topic.trim.nonEmpty)
 
   override def toString: String = {
-    s"Kafka source server: ${server} topic:${topic}"
+    s"KafkaSourceConfigEntry:{ " +
+      s"server=${server}, " +
+      s"topic=${topic}, " +
+      s"batch=${batch}, " +
+      s"partition=${partition}, " +
+      s"intervalSeconds=${intervalSeconds}}, " +
+      s"verbose=${verbose}, " +
+      s"reload=${reloadEntry}"
   }
 }
 

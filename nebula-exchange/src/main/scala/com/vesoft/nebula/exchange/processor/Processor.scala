@@ -12,6 +12,7 @@ import com.vesoft.nebula.exchange.utils.{HDFSUtils, NebulaUtils}
 import com.vesoft.nebula.meta.PropertyType
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType}
+import com.alibaba.fastjson.JSONObject
 
 /**
   * processor is a converter.
@@ -65,6 +66,39 @@ trait Processor extends Serializable {
         }
       }
       case _ => row.get(index)
+    }
+  }
+
+  def extraValueForClientFromJSON(jsonObj: JSONObject, field: String, fieldTypeMap: Map[String, Int]): Any = {
+    PropertyType.findByValue(fieldTypeMap(field)) match {
+      case PropertyType.STRING | PropertyType.FIXED_STRING => {
+        var value = jsonObj.getString(field)
+        if (value == null) {
+          null
+        } else {
+          if (value.equals(DEFAULT_EMPTY_VALUE)) {
+            value = ""
+          }
+          val result = NebulaUtils.escapeUtil(value).mkString("\"", "", "\"")
+          result
+        }
+      }
+      case PropertyType.DATE     => "date(\"" + jsonObj.getString(field) + "\")"
+      case PropertyType.DATETIME => "datetime(\"" + jsonObj.getString(field) + "\")"
+      case PropertyType.TIME     => "time(\"" + jsonObj.getString(field) + "\")"
+      case PropertyType.TIMESTAMP => {
+        val value = jsonObj.getString(field)
+        if (NebulaUtils.isNumic(value)) {
+          value
+        } else {
+          "timestamp(\"" + jsonObj.getString(field) + "\")"
+        }
+      }
+      case PropertyType.INT8                      => jsonObj.getLong(field).toString
+      case PropertyType.INT16                     => jsonObj.getLong(field).toString
+      case PropertyType.INT32                     => jsonObj.getLong(field).toString
+      case PropertyType.INT64 | PropertyType.VID  => jsonObj.getLong(field).toString
+      case _                                      => jsonObj.getString(field)
     }
   }
 

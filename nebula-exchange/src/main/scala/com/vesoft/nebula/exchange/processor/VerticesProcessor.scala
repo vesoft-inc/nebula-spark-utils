@@ -69,7 +69,6 @@ class VerticesProcessor(data: DataFrame,
     val writer = new NebulaGraphClientWriter(config.databaseConfig,
                                              config.userConfig,
                                              config.rateConfig,
-                                             tagConfig,
                                              graphProvider)
 
     val errorBuffer = ArrayBuffer[String]()
@@ -79,7 +78,7 @@ class VerticesProcessor(data: DataFrame,
     val startTime = System.currentTimeMillis
     iterator.grouped(tagConfig.batch).foreach { vertex =>
       val vertices      = Vertices(nebulaKeys, vertex.toList, tagConfig.vertexPolicy)
-      val failStatement = writer.writeVertices(vertices)
+      val failStatement = writer.writeVertices(vertices, tagConfig.name)
       if (failStatement == null) {
         batchSuccess.add(1)
       } else {
@@ -121,7 +120,6 @@ class VerticesProcessor(data: DataFrame,
       val tagItem     = metaProvider.getTagItem(space, tagName)
 
       data
-        .dropDuplicates(tagConfig.vertexField)
         .mapPartitions { iter =>
           iter.map { row =>
             val index: Int = row.schema.fieldIndex(tagConfig.vertexField)

@@ -29,6 +29,7 @@ target/
 .idea/
 .eclipse/
 *.iml
+.metals/
 
 spark-importer.ipr
 spark-importer.iws

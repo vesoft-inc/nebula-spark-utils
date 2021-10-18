@@ -26,7 +26,8 @@ object ErrorHandler {
       val fileSystem  = FileSystem.get(new Configuration())
       val filesStatus = fileSystem.listStatus(new Path(path))
       for (file <- filesStatus) {
-        if (!file.getPath.getName.startsWith("reload.")) {
+        if (!file.getPath.getName.startsWith("reload.") ||
+            file.getPath.getName.endsWith(".lastReload")) {
           fileSystem.delete(file.getPath, true)
         }
       }
@@ -47,8 +48,14 @@ object ErrorHandler {
     */
   def save(buffer: ArrayBuffer[String], path: String): Unit = {
     LOG.info(s"create reload path $path")
-    val fileSystem = FileSystem.get(new Configuration())
-    val errors     = fileSystem.create(new Path(path))
+    val fileSystem  = FileSystem.get(new Configuration())
+    val targetPath  = new Path(path)
+    val errors      = if (fileSystem.exists(targetPath)) {
+      // For kafka, the error ngql need to append to a same file instead of overwrite
+      fileSystem.append(targetPath)
+    } else {
+      fileSystem.create(targetPath)
+    }
 
     try {
       for (error <- buffer) {
@@ -57,6 +64,30 @@ object ErrorHandler {
       }
     } finally {
       errors.close()
+    }
+  }
+
+  /**
+    * rename the stale reload file
+    *
+    * @param path
+    */
+  def rename(path: String): Unit = {
+    try {
+      val fileSystem  = FileSystem.get(new Configuration())
+      val filesStatus = fileSystem.listStatus(new Path(path))
+      for (file <- filesStatus) {
+        val reloadFile = file.getPath.getName
+        if (reloadFile.startsWith("reload.")) {
+          if(!fileSystem.rename(file.getPath, new Path(reloadFile + ".lastReload"))) {
+            LOG.warn(s"Can not rename $reloadFile. The new reload data will append after stale reload data")
+          }
+        }
+      }
+    } catch {
+      case e: Throwable => {
+        LOG.error(s"Stale reload file in $path cannot be rename ", e)
+      }
     }
   }
 

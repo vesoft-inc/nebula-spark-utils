@@ -22,9 +22,10 @@ import com.vesoft.nebula.exchange.config.{
   Neo4JSourceConfigEntry,
   PulsarSourceConfigEntry,
   SinkCategory,
-  SourceCategory
+  SourceCategory,
+  KafkaReloadCategory
 }
-import com.vesoft.nebula.exchange.processor.{EdgeProcessor, VerticesProcessor}
+import com.vesoft.nebula.exchange.processor.{EdgeProcessor, VerticesProcessor, KafkaProcessor}
 import com.vesoft.nebula.exchange.reader.{
   CSVReader,
   ClickhouseReader,
@@ -43,6 +44,7 @@ import com.vesoft.nebula.exchange.reader.{
 import com.vesoft.nebula.exchange.processor.ReloadProcessor
 import org.apache.log4j.Logger
 import org.apache.spark.SparkConf
+import scala.util.control.Breaks
 
 final case class Argument(config: String = "application.conf",
                           hive: Boolean = false,
@@ -117,6 +119,70 @@ object Exchange {
       processor.process()
       LOG.info(s"batchSuccess.reload: ${batchSuccess.value}")
       LOG.info(s"batchFailure.reload: ${batchFailure.value}")
+      sys.exit(0)
+    }
+
+    if (configs.kafkaConfigEntry.isDefined) {
+      if (configs.tagsConfig.isEmpty && configs.edgesConfig.isEmpty) {
+        throw new IllegalArgumentException("Both tag and edge is empty, nothing to parse")
+      }
+      val kafkaConfig = configs.kafkaConfigEntry.get
+      // handle error
+      if (kafkaConfig.reloadEntry.isDefined) {
+        val pattern = kafkaConfig.reloadEntry.get.reload
+        LOG.info(s"Need to reload kafka data in ${configs.errorConfig.errorPath}, the pattern is $pattern.")
+        pattern match {
+          case KafkaReloadCategory.ONLYONCE =>
+            if (!handleError(spark, configs, configs.errorConfig.errorPath)) {
+              LOG.info("Can not reload data successfully")
+            }
+            LOG.info("Reload kafka data down")
+            LOG.info("Kafka reload category is onlyonce, so we shutdown after reload data.")
+            spark.close()
+            sys.exit(0)
+          case KafkaReloadCategory.NEEDRETRY =>
+            val retry = kafkaConfig.reloadEntry.get.retry
+            LOG.info(s"Retry times: $retry")
+            val loop = new Breaks
+            var cnt = 0
+            loop.breakable(
+              while (cnt < retry) {
+                if (handleError(spark, configs, configs.errorConfig.errorPath)) {
+                  loop.break()
+                } else {
+                  cnt += 1
+                }
+              }
+            )
+            if (cnt == retry) {
+              LOG.error("Can not reload data successfully")
+            }
+            LOG.info("Reload kafka data down")
+            LOG.info("Kafka reload category is needtry, so we shutdown after reload data.")
+            spark.close()
+            sys.exit(0)
+          case KafkaReloadCategory.CONTINUE =>
+            if (!handleError(spark, configs, configs.errorConfig.errorPath)) {
+              LOG.info("Can not reload data successfully")
+            }
+            LOG.info("Reload data down. Begin consume kakfa data and send it to nebula")
+          case _ =>
+            throw new IllegalArgumentException("Unknow pattern for kafka reload.")
+        }
+      }
+      LOG.info("Parse tag and edge from kafka value and insert them to nebula")
+      // import data inside kafka value to Nebula
+      val data = createDataSource(spark, kafkaConfig)
+      if (data.isDefined && !c.dry) {
+        val processor = new KafkaProcessor(
+          spark,
+          repartition(data.get, kafkaConfig.partition, SourceCategory.KAFKA),
+          configs)
+        processor.process()
+      } else {
+        LOG.info("Unknow error, can not read data from kafka")
+      }
+      spark.close()
       sys.exit(0)
     }
 
@@ -206,17 +272,8 @@ object Exchange {
     }
 
     // reimport for failed tags and edges
-    if (failures > 0 && ErrorHandler.existError(configs.errorConfig.errorPath)) {
-      val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
-      val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
-      val data         = spark.read.text(configs.errorConfig.errorPath)
-      val startTime    = System.currentTimeMillis()
-      val processor    = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
-      processor.process()
-      val costTime = ((System.currentTimeMillis() - startTime) / 1000.0).formatted("%.2f")
-      LOG.info(s"reimport ngql cost time: ${costTime}")
-      LOG.info(s"batchSuccess.reimport: ${batchSuccess.value}")
-      LOG.info(s"batchFailure.reimport: ${batchFailure.value}")
+    if (failures > 0) {
+      handleError(spark, configs, configs.errorConfig.errorPath)
     }
     spark.close()
   }
@@ -304,6 +361,47 @@ object Exchange {
     }
   }
 
+  /**
+    * handle error gql in error path
+    *
+    * @param spark
+    * @param configs
+    * @param errorpath
+    * @param needStored
+    *
+    * @return
+    */
+  private[this] def handleError(spark: SparkSession, configs: Configs, errorpath: String): Boolean = {
+    if (ErrorHandler.existError(errorpath)) {
+      LOG.info(s"Begin handle error stored in $errorpath")
+      // get date need to reload
+      val batchSuccess = spark.sparkContext.longAccumulator(s"batchSuccess.reimport")
+      val batchFailure = spark.sparkContext.longAccumulator(s"batchFailure.reimport")
+      val data         = spark.read.text(errorpath)
+      data.cache()
+
+      // rename the reload file
+      ErrorHandler.rename(errorpath)
+
+      val count     = data.count()
+      val startTime = System.currentTimeMillis()
+      val processor = new ReloadProcessor(data, configs, batchSuccess, batchFailure)
+      processor.process()
+      val costTime = ((System.currentTimeMillis() - startTime) / 1000.0).formatted("%.2f")
+      LOG.info(s"reimport ngql count: ${count}, cost time: ${costTime}")
+      LOG.info(s"batchSuccess.reimport: ${batchSuccess.value}")
+      LOG.info(s"batchFailure.reimport: ${batchFailure.value}")
+
+      // clear stale reload file generated during last reload period.
+      // Only store reload file created during this reload process period.
+      LOG.info(s"clear error files in $errorpath except file which start with reload")
+      ErrorHandler.clear(errorpath)
+      batchFailure.value == 0
+    } else {
+      LOG.info(s"There is no error stored in $errorpath. Skip error handle")
+      true
+    }
+  }
   /**
     * Repartition the data frame using the specified partition number.
     *

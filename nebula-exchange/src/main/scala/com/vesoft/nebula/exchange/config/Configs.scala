@@ -48,7 +48,7 @@ case class DataBaseConfigEntry(graphAddress: List[String],
   for (address <- metaAddresses) {
     require(
       !address.contains(",") && !address.contains("，"),
-      "nebula.address.meta has wrong format,,please make sure the format is [\"ip1:port1\",\"ip2:port2\"]")
+      "nebula.address.meta has wrong format, please make sure the format is [\"ip1:port1\",\"ip2:port2\"]")
   }
 
   override def toString: String = super.toString
@@ -180,6 +180,7 @@ case class HiveConfigEntry(warehouse: String,
       s"connectionPassWord=$connectionPassWord}"
 }
 
+
 /**
   * Configs
   */
@@ -192,7 +193,8 @@ case class Configs(databaseConfig: DataBaseConfigEntry,
                    sparkConfigEntry: SparkConfigEntry,
                    tagsConfig: List[TagConfigEntry],
                    edgesConfig: List[EdgeConfigEntry],
-                   hiveConfigEntry: Option[HiveConfigEntry] = None)
+                   hiveConfigEntry: Option[HiveConfigEntry] = None,
+                   kafkaConfigEntry: Option[KafkaSourceConfigEntry] = None)
 
 object Configs {
   private[this] val LOG = Logger.getLogger(this.getClass)
@@ -214,6 +216,13 @@ object Configs {
   private[this] val DEFAULT_REMOTE_PATH          = None
   private[this] val DEFAULT_STREAM_INTERVAL      = 30
   private[this] val DEFAULT_PARALLEL             = 1
+  // The default value for kafka configuration
+  private[this] val DEFAULT_DATA_SOURCE          = "kafka"
+  private[this] val DEFAULT_SINK                 = "CLIENT"
+  private[this] val DEFAULT_KAFKA_SERVER         = "unused_server"
+  private[this] val DEFAULT_KAFKA_TOPIC          = "unused_topic"
+  private[this] val DEFAULT_KAFKA_RETRY_TIMES    = 3
+  private[this] val DEFAULT_KAFKA_VERBOSE        = true
 
   /**
     *
@@ -279,14 +288,22 @@ object Configs {
       hiveEntryOpt = Option(hiveEntry)
     }
 
+    var kafkaEntryOpt: Option[KafkaSourceConfigEntry] = None
+    if (config.hasPath("kafka")) {
+      val kafkaConfig     = config.getConfig("kafka")
+      val kafkaEntry      = dataSourceConfig(SourceCategory.KAFKA, kafkaConfig, nebulaConfig)
+      kafkaEntryOpt       = Option(kafkaEntry.asInstanceOf[KafkaSourceConfigEntry])
+      LOG.info(s"Kafka Config: ${kafkaEntry}")
+    }
+
     val tags       = mutable.ListBuffer[TagConfigEntry]()
     val tagConfigs = getConfigsOrNone(config, "tags")
     if (tagConfigs.isDefined) {
       for (tagConfig <- tagConfigs.get.asScala) {
-        if (!tagConfig.hasPath("name") ||
-            !tagConfig.hasPath("type.source") ||
-            !tagConfig.hasPath("type.sink")) {
-          LOG.error("The `name` and `type` must be specified")
+        val hasSource = kafkaEntryOpt.isDefined ||
+                        (tagConfig.hasPath("type.source") && tagConfig.hasPath("type.sink"))
+        if (!tagConfig.hasPath("name") || !hasSource) {
+          LOG.error("The `name` and `type` must be specified when data source is not kafka")
           break()
         }
 
@@ -313,11 +330,14 @@ object Configs {
           None
         }
 
-        val sourceCategory = toSourceCategory(tagConfig.getString("type.source"))
+        val sourceCategory = toSourceCategory(getOrElse(tagConfig, "type.source", DEFAULT_DATA_SOURCE))
         val sourceConfig   = dataSourceConfig(sourceCategory, tagConfig, nebulaConfig)
         LOG.info(s"Source Config ${sourceConfig}")
+        if (kafkaEntryOpt.isEmpty && sourceCategory == SourceCategory.KAFKA) {
+          throw new IllegalArgumentException("The kafka configution should specify independently instead of specify inside the tag config") 
+        }
 
-        val sinkCategory = toSinkCategory(tagConfig.getString("type.sink"))
+        val sinkCategory = toSinkCategory(getOrElse(tagConfig, "type.sink", DEFAULT_SINK))
         val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig)
         LOG.info(s"Sink Config ${sourceConfig}")
 
@@ -351,9 +371,9 @@ object Configs {
     val edgeConfigs = getConfigsOrNone(config, "edges")
     if (edgeConfigs.isDefined) {
       for (edgeConfig <- edgeConfigs.get.asScala) {
-        if (!edgeConfig.hasPath("name") ||
-            !edgeConfig.hasPath("type.source") ||
-            !edgeConfig.hasPath("type.sink")) {
+        val hasSource = kafkaEntryOpt.isDefined ||
+                        (edgeConfig.hasPath("type.source") && edgeConfig.hasPath("type.sink"))
+        if (!edgeConfig.hasPath("name") || !hasSource) {
           LOG.error("The `name` and `type`must be specified")
           break()
         }
@@ -370,11 +390,13 @@ object Configs {
           edgeConfig.hasPath("latitude") &&
           edgeConfig.hasPath("longitude")
 
-        val sourceCategory = toSourceCategory(edgeConfig.getString("type.source"))
+        val sourceCategory = toSourceCategory(getOrElse(edgeConfig, "type.source", DEFAULT_DATA_SOURCE))
         val sourceConfig   = dataSourceConfig(sourceCategory, edgeConfig, nebulaConfig)
         LOG.info(s"Source Config ${sourceConfig}")
-
-        val sinkCategory = toSinkCategory(edgeConfig.getString("type.sink"))
+        if (kafkaEntryOpt.isEmpty && sourceCategory == SourceCategory.KAFKA) {
+          throw new IllegalArgumentException("The kafka configution should specify independently instead of specify inside the tag config") 
+        }
+        val sinkCategory = toSinkCategory(getOrElse(edgeConfig, "type.sink", DEFAULT_SINK))
         val sinkConfig   = dataSinkConfig(sinkCategory, nebulaConfig)
         LOG.info(s"Sink Config ${sourceConfig}")
 
@@ -472,7 +494,8 @@ object Configs {
             sparkEntry,
             tags.toList,
             edges.toList,
-            hiveEntryOpt)
+            hiveEntryOpt,
+            kafkaEntryOpt)
   }
 
   /**
@@ -513,6 +536,14 @@ object Configs {
     }
   }
 
+  private[this] def toKafkaReloadCategory(category: String): KafkaReloadCategory.Value = {
+    category.trim().toUpperCase match {
+      case "ONLYONCE"     => KafkaReloadCategory.ONLYONCE
+      case "CONTINUE"     => KafkaReloadCategory.CONTINUE
+      case "NEEDRETRY"    => KafkaReloadCategory.NEEDRETRY
+      case _              => throw new IllegalArgumentException(s"Kafka reload category parse error: ${category} not support")
+    }
+  }
   /**
     * Use to generate data source config according to category of source.
     *
@@ -584,13 +615,29 @@ object Configs {
           getOrElse(config, "sentence", "")
         )
       case SourceCategory.KAFKA =>
-        val intervalSeconds =
-          if (config.hasPath("interval.seconds")) config.getInt("interval.seconds")
-          else DEFAULT_STREAM_INTERVAL
+        var reloadOpt: Option[KafkaRetryConfigEntry] = None
+        if (config.hasPath("reload")) {
+          reloadOpt = Some(KafkaRetryConfigEntry(toKafkaReloadCategory(config.getString("reload")),
+                                                 getOrElse(config, "retry", DEFAULT_KAFKA_RETRY_TIMES)))
+        }
+        val verbose = if (config.hasPath("verbose")) {
+          val verboseStr = config.getString("verbose").trim()
+          verboseStr.toUpperCase match {
+            case "TRUE"   => true
+            case "FALSE"  => false
+            case _        => throw new IllegalArgumentException(s"verbose should be true or false, $verboseStr is not support")
+          }
+        } else {
+          false
+        }
         KafkaSourceConfigEntry(SourceCategory.KAFKA,
-                               intervalSeconds,
-                               config.getString("service"),
-                               config.getString("topic"))
+                               getOrElse(config, "interval.seconds", DEFAULT_STREAM_INTERVAL),
+                               getOrElse(config, "service", DEFAULT_KAFKA_SERVER),
+                               getOrElse(config, "topic", DEFAULT_KAFKA_TOPIC),
+                               getOrElse(config, "batch", DEFAULT_BATCH),
+                               getOrElse(config, "partition", DEFAULT_PARTITION),
+                               verbose,
+                               reloadOpt)
       case SourceCategory.PULSAR =>
         val options =
           config.getObject("options").unwrapped.asScala.map(x => x._1 -> x._2.toString).toMap

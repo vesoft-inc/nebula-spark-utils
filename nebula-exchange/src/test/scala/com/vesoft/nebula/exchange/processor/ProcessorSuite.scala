@@ -21,6 +21,8 @@ import org.apache.spark.sql.types.{
   StructType
 }
 import org.junit.Test
+import com.alibaba.fastjson.{JSON, JSONObject}
+import com.vesoft.nebula.exchange.utils.NebulaUtils.DEFAULT_EMPTY_VALUE
 
 class ProcessorSuite extends Processor {
   val values = List("Bob",
@@ -90,6 +92,42 @@ class ProcessorSuite extends Processor {
     assert(extraValueForClient(row, "col12", map).toString.toDouble > 12.00)
     assert(extraValueForClient(row, "col13", map).toString.toDouble > 22.10)
     assert(extraValueForClient(row, "col14", map) == null)
+  }
+
+  @Test
+  def extraValueForClientFromJSONSuite(): Unit = {
+    var jsonObj = JSON.parseObject("{}")
+    jsonObj.put("col1", "Bob")
+    jsonObj.put("col2", "fixedBob")
+    jsonObj.put("col3", 12)
+    jsonObj.put("col4", 200)
+    jsonObj.put("col5", 1000)
+    jsonObj.put("col6", 100000)
+    jsonObj.put("col7", "2021-01-01")
+    jsonObj.put("col8", "2021-01-01T12:00:00")
+    jsonObj.put("col9", "12:00:00")
+    jsonObj.put("col10", "2021-01-01T12:00:00")
+    jsonObj.put("col11", true)
+    jsonObj.put("col12", 12.01)
+    jsonObj.put("col13", 22.12)
+    jsonObj.put("col14", null)
+
+    assert(extraValueForClientFromJSON(jsonObj, "col1", map).toString.equals("\"Bob\""))
+    assert(extraValueForClientFromJSON(jsonObj, "col2", map).toString.equals("\"fixedBob\""))
+    assert(extraValueForClientFromJSON(jsonObj, "col3", map).toString.toInt == 12)
+    assert(extraValueForClientFromJSON(jsonObj, "col4", map).toString.toInt == 200)
+    assert(extraValueForClientFromJSON(jsonObj, "col5", map).toString.toInt == 1000)
+    assert(extraValueForClientFromJSON(jsonObj, "col6", map).toString.toLong == 100000)
+    assert(extraValueForClientFromJSON(jsonObj, "col7", map).toString.equals("date(\"2021-01-01\")"))
+    assert(
+      extraValueForClientFromJSON(jsonObj, "col8", map).toString.equals("datetime(\"2021-01-01T12:00:00\")"))
+    assert(extraValueForClientFromJSON(jsonObj, "col9", map).toString.equals("time(\"12:00:00\")"))
+    assert(
+      extraValueForClientFromJSON(jsonObj, "col10", map).toString.equals("timestamp(\"2021-01-01T12:00:00\")"))
+    assert(extraValueForClientFromJSON(jsonObj, "col11", map).toString.toBoolean)
+    assert(extraValueForClientFromJSON(jsonObj, "col12", map).toString.toDouble > 12.00)
+    assert(extraValueForClientFromJSON(jsonObj, "col13", map).toString.toDouble > 22.10)
+    assert(extraValueForClientFromJSON(jsonObj, "col14", map) == null)
   }
 
   @Test
